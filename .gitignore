@@ -1,0 +1,106 @@
+# Общие файлы IDE и ОС
+.DS_Store
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# Редакторы и IDE
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.js.map
+*.js.map.swo
+*.js.map.swo
+*.jfm
+
+# Временные файлы
+*.tmp
+*.temp
+
+# Логи и диагностические файлы
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Результаты сборки и пакеты
+[Bb]in/
+[Oo]bj/
+.vs/
+packages/
+artifacts/
+*.nupkg
+*.nuget
+*.njsproj
+*.dot[Cc]over
+
+# Файлы тестов
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# Файлы резервных копий
+*.bak
+*.gho
+*.ori
+*.orig
+*.bkp
+
+# Файлы зависимостей
+**/node_modules/
+jspm_packages/
+
+# Файлы проекта
+*.csproj.user
+*.csproj.bak
+
+# Файлы базы данных PostgreSQL
+*.psql
+*.pgsql
+pgdata/
+postgres-data/
+postgresql/data/
+postgresql/logs/
+
+# Файлы RabbitMQ
+rabbitmq_data/
+rabbitmq_logs/
+*.rabbitmq
+
+# Файлы конфигурации и секреты
+appsettings.Development.json
+appsettings.Local.json
+appsettings.Secrets.json
+appsettings.Staging.json
+appsettings.Production.json
+secrets.json
+*.secret
+*.pfx
+*.cer
+*.crt
+*.key
+*.pem
+
+# Файлы Docker
+docker-compose.override.yml
+docker-compose.debug.yml
+docker-data/
+
+# Файлы миграций Entity Framework Core
+/Migrations/*.Designer.cs
+/Migrations/*.resx
+
+# Файлы покрытия тестами
+coverage/
+*.coverage
+*.coverage.xml
+
+# Файлы dotnet
+.dotnet/
+.history/
+
+# Файлы телеграм бота (если используются локальные конфиги)
+botconfig*.json
