@@ -15,8 +15,4 @@
     <ProjectReference Include="..\ExpenseTrackerLibrary\ExpenseTrackerLibrary.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Controllers\" />
-  </ItemGroup>
-
 </Project>

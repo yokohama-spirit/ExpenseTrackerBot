@@ -1,4 +1,4 @@
-﻿namespace TelegramBot
+﻿namespace TelegramBot.Config
 {
     public class ExpenseCreationState
     {
