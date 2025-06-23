@@ -1,9 +1,12 @@
-﻿using Telegram.Bot;
+﻿using ExpenseTrackerLibrary.Application.Dto;
+using ExpenseTrackerLibrary.Domain.Entities;
+using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
+using TelegramBot.Support;
 
 namespace TelegramBot.Services
 {
@@ -12,14 +15,20 @@ namespace TelegramBot.Services
         private readonly ITelegramBotClient _botClient;
         private readonly HttpClient _httpClient;
         private readonly Dictionary<long, ExpenseCreationState> _userStates;
+        private readonly Dictionary<long, CategoryCreationState> _userCatStates;
         private readonly TelegramBotConfig _config;
+        private readonly IExpensesSupport _ex;
 
-        public TelegramBotService(TelegramBotConfig config)
+        public TelegramBotService
+            (TelegramBotConfig config,
+            IExpensesSupport ex)
         {
             _config = config;
             _botClient = new TelegramBotClient(_config.Token);
             _httpClient = new HttpClient { BaseAddress = new Uri(_config.ApiBaseUrl) };
             _userStates = new Dictionary<long, ExpenseCreationState>();
+            _userCatStates = new Dictionary<long, CategoryCreationState>();
+            _ex = ex;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -46,131 +55,79 @@ namespace TelegramBot.Services
 
             long chatId = message.Chat.Id;
 
+
+            if (_userCatStates.ContainsKey(chatId))
+            {
+                await HandleCategoryUserInput(chatId, text, ct);
+                return;
+            }
+
+
             switch (text)
             {
                 case "/start":
-                    await HandleStartCommand(chatId, ct);
+                    await _ex.HandleStartCommand(chatId, ct);
                     break;
 
                 case "/create":
-                    await HandleCreateCommand(chatId, ct);
+                    await _ex.HandleCreateCommand(chatId, ct);
                     break;
 
                 case "/checkw":
-                    await HandleCheckWeeklyCommand(chatId, ct);
+                    await _ex.HandleCheckWeeklyCommand(chatId, ct);
                     break;
 
                 case "/checkm":
-                    await HandleCheckMonthlyCommand(chatId, ct);
+                    await _ex.HandleCheckMonthlyCommand(chatId, ct);
+                    break;
+
+                case "/newcat":
+                    await HandleCreateCommand(chatId, ct);
+                    break;
+
+                case "/mycat":
+                    await HandleMyCategoriesCommand(chatId, ct);
                     break;
 
                 default:
-                    await HandleUserInput(chatId, text, ct);
+                    await _ex.HandleUserInput(chatId, text, ct);
                     break;
             }
         }
-
-        private async Task HandleStartCommand(long chatId, CancellationToken ct)
+        public async Task HandleCreateCommand(long chatId, CancellationToken ct)
         {
-            await _botClient.SendMessage(
-                chatId: chatId,
-                text: "Привет! Это бот для подсчета твоих трат.\n" +
-                      "Доступные команды:\n" +
-                      "/create - добавить расход\n" +
-                      "/checkw - расходы за неделю\n" +
-                      "/checkm - расходы за месяц",
-                cancellationToken: ct);
-        }
+            Console.WriteLine($"Получена команда /newcat от chatId: {chatId}");
 
-        private async Task HandleCreateCommand(long chatId, CancellationToken ct)
-        {
-            _userStates[chatId] = new ExpenseCreationState { Step = 1 };
-
-/*            var replyKeyboard = new ReplyKeyboardMarkup(new[]
+            _userCatStates[chatId] = new CategoryCreationState
             {
-                new KeyboardButton[] { "Пропустить" }
-            })
+                Step = 1,
+                OperationType = "category"
+            };
+
+            Console.WriteLine($"Состояние для {chatId} установлено: {nameof(CategoryCreationState)}");
+
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Введите название категории:",
+                cancellationToken: ct);
+        }
+
+        public async Task HandleCategoryUserInput(long chatId, string text, CancellationToken ct)
+        {
+            if (!_userCatStates.TryGetValue(chatId, out var state))
             {
-                ResizeKeyboard = true,
-                OneTimeKeyboard = true 
-            };*/
-
-            await _botClient.SendMessage(
-                chatId: chatId,
-                text: "Введите сумму расхода:",
-/*                replyMarkup: replyKeyboard,*/
-                cancellationToken: ct);
-        }
-
-        private async Task HandleCheckWeeklyCommand(long chatId, CancellationToken ct)
-        {
-            var weekly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkw/{chatId}", ct);
-            await _botClient.SendMessage(
-                chatId: chatId,
-                text: $"Расходы за неделю: {weekly} ₽",
-                cancellationToken: ct);
-        }
-
-        private async Task HandleCheckMonthlyCommand(long chatId, CancellationToken ct)
-        {
-            var monthly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkm/{chatId}", ct);
-            await _botClient.SendMessage(
-                chatId: chatId,
-                text: $"Расходы за месяц: {monthly} ₽",
-                cancellationToken: ct);
-        }
-
-        private async Task HandleUserInput(long chatId, string text, CancellationToken ct)
-        {
-            if (!_userStates.TryGetValue(chatId, out var state))
+                Console.WriteLine($"Не найдено состояние для chatId {chatId}");  
                 return;
+            }
+
+            Console.WriteLine($"Обработка ввода для {chatId}: {text}, состояние: {state.OperationType}");
 
             switch (state.Step)
             {
-                case 1 when decimal.TryParse(text, out var amount):
-                    state.Amount = amount;
-                    state.Step = 2;
-
-                    var replyKeyboard = new ReplyKeyboardMarkup(new[]
-                    {
-                        new KeyboardButton[] { "Пропустить" }
-                    })
-                    {
-                        ResizeKeyboard = true,
-                        OneTimeKeyboard = true
-                    };
-
-                    await _botClient.SendMessage(
-                        chatId: chatId,
-                        text: "Введите описание расхода:",
-                        replyMarkup: replyKeyboard,
-                        cancellationToken: ct);
+                case 1:
+                    await HandleCategoryInput(chatId, text, ct);
                     break;
 
-                case 2:
-                    var removeKeyboard = new ReplyKeyboardRemove();
-
-                    if (text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase))
-                    {
-                        await _botClient.SendMessage(
-                            chatId: chatId,
-                            text: "Описание пропущено",
-                            replyMarkup: removeKeyboard,
-                            cancellationToken: ct);
-
-                        await ProcessExpenseCreation(chatId, string.Empty, state, ct);
-                    }
-                    else
-                    {
-                        await _botClient.SendMessage(
-                            chatId: chatId,
-                            text: "Описание сохранено",
-                            replyMarkup: removeKeyboard,
-                            cancellationToken: ct);
-
-                        await ProcessExpenseCreation(chatId, text, state, ct);
-                    }
-                    break;
 
                 default:
                     await _botClient.SendMessage(
@@ -181,33 +138,81 @@ namespace TelegramBot.Services
             }
         }
 
-        private async Task ProcessExpenseCreation(long chatId, string text, ExpenseCreationState state, CancellationToken ct)
+
+        private async Task HandleCategoryInput(long chatId, string text, CancellationToken ct)
         {
-            var expense = new ExpenseTrackerLibrary.Domain.Entities.Expense
+            var category = new CreateCategoryDTO
             {
-                Amount = state.Amount,
-                Content = text,
-                ChatId = chatId
+                ChatId = chatId,
+                Name = text
             };
 
-            var response = await _httpClient.PostAsJsonAsync("/api/expense", expense, ct);
+            var response = await _httpClient.PostAsJsonAsync("/api/category", category, ct);
+
+            Console.WriteLine($"Ответ от API: {response.StatusCode}");  // Логирование статуса ответа
 
             if (response.IsSuccessStatusCode)
             {
                 await _botClient.SendMessage(
                     chatId: chatId,
-                    text: "✅ Расход добавлен!",
+                    text: "✅ Категория успешно добавлена!",
                     cancellationToken: ct);
             }
             else
             {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Ошибка при добавлении категории: {errorContent}");  // Лог ошибки
+
                 await _botClient.SendMessage(
                     chatId: chatId,
-                    text: "❌ Ошибка при добавлении",
+                    text: "❌ Ошибка при добавлении категории",
                     cancellationToken: ct);
             }
 
-            _userStates.Remove(chatId);
+            _userCatStates.Remove(chatId);
+        }
+
+
+        public async Task HandleMyCategoriesCommand(long chatId, CancellationToken ct)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"/api/category/mycat/{chatId}", ct);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Получен ответ: {content}");
+
+
+                    var messageText = string.IsNullOrEmpty(content)
+                        ? "У вас пока нет категорий"
+                        : $"Ваши категории: {content}";
+
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: messageText,
+                        cancellationToken: ct);
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Ошибка API: {errorContent}");
+
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "❌ Ошибка при получении категорий",
+                        cancellationToken: ct);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Исключение: {ex}");
+                await _botClient.SendMessage(
+                    chatId: chatId,
+                    text: "⚠ Ошибка соединения с сервером",
+                    cancellationToken: ct);
+            }
         }
 
         private Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)

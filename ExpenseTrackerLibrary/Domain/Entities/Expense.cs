@@ -13,5 +13,6 @@ namespace ExpenseTrackerLibrary.Domain.Entities
         public string? Content { get; set; }
         public long? ChatId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public List<Category>? Categories {  get; set; } 
     }
 }

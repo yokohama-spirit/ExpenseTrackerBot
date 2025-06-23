@@ -1,5 +1,6 @@
 ﻿using TelegramBot.Config;
 using TelegramBot.Services;
+using TelegramBot.Support;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,7 @@ var botConfig = new TelegramBotConfig
 // DI
 builder.Services.AddSingleton(botConfig);
 builder.Services.AddSingleton<ITelegramBotService, TelegramBotService>();
+builder.Services.AddSingleton<IExpensesSupport, ExpensesSupport>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

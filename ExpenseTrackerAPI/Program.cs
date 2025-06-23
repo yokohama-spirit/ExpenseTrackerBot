@@ -18,7 +18,7 @@ builder.Services.AddDbContext<DatabaseConnect>(options =>
 
 
 builder.Services.AddScoped<IExpenseRepository, ExpenseRepository>();
-
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 
 
 
