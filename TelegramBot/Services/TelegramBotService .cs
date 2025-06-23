@@ -1,4 +1,7 @@
 ﻿using Telegram.Bot;
+using Telegram.Bot.Polling;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
 
@@ -6,7 +9,7 @@ namespace TelegramBot.Services
 {
     public class TelegramBotService : ITelegramBotService
     {
-        private readonly TelegramBotClient _botClient;
+        private readonly ITelegramBotClient _botClient;
         private readonly HttpClient _httpClient;
         private readonly Dictionary<long, ExpenseCreationState> _userStates;
         private readonly TelegramBotConfig _config;
@@ -21,17 +24,24 @@ namespace TelegramBot.Services
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
+            var receiverOptions = new ReceiverOptions
+            {
+                AllowedUpdates = Array.Empty<UpdateType>() 
+            };
+
             _botClient.StartReceiving(
-                HandleUpdateAsync,
-                HandleErrorAsync,
-                cancellationToken: cancellationToken);
+                updateHandler: HandleUpdateAsync,
+                errorHandler: HandleErrorAsync, 
+                receiverOptions: receiverOptions,
+                cancellationToken: cancellationToken
+            );
 
             Console.WriteLine("Бот запущен. Нажмите Ctrl+C для остановки...");
         }
 
-        private async Task HandleUpdateAsync(ITelegramBotClient bot, Telegram.Bot.Types.Update update, CancellationToken ct)
+        private async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken ct)
         {
-            if (update.Message is not { } message || message.Text is not { } text)
+            if (update.Message is not { Text: { } text } message)
                 return;
 
             long chatId = message.Chat.Id;
@@ -59,14 +69,16 @@ namespace TelegramBot.Services
                     break;
             }
         }
+
         private async Task HandleStartCommand(long chatId, CancellationToken ct)
         {
-            await _botClient.SendTextMessageAsync(
-                chatId,
-                "Доступные команды:\n" +
-                "/create - добавить расход\n" +
-                "/checkw - расходы за неделю\n" +
-                "/checkm - расходы за месяц",
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Привет! Это бот для подсчета твоих трат.\n" +
+                      "Доступные команды:\n" +
+                      "/create - добавить расход\n" +
+                      "/checkw - расходы за неделю\n" +
+                      "/checkm - расходы за месяц",
                 cancellationToken: ct);
         }
 
@@ -74,34 +86,44 @@ namespace TelegramBot.Services
         {
             _userStates[chatId] = new ExpenseCreationState { Step = 1 };
 
-
-            var replyKeyboard = new ReplyKeyboardMarkup(new[]
+/*            var replyKeyboard = new ReplyKeyboardMarkup(new[]
             {
-             new KeyboardButton[] { "Пропустить" }
+                new KeyboardButton[] { "Пропустить" }
             })
             {
-                ResizeKeyboard = true 
-            };
+                ResizeKeyboard = true,
+                OneTimeKeyboard = true 
+            };*/
 
-
-            await _botClient.SendTextMessageAsync(chatId, "Введите сумму расхода:", cancellationToken: ct);
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Введите сумму расхода:",
+/*                replyMarkup: replyKeyboard,*/
+                cancellationToken: ct);
         }
 
         private async Task HandleCheckWeeklyCommand(long chatId, CancellationToken ct)
         {
             var weekly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkw/{chatId}", ct);
-            await _botClient.SendTextMessageAsync(chatId, $"Расходы за неделю: {weekly} ₽", cancellationToken: ct);
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: $"Расходы за неделю: {weekly} ₽",
+                cancellationToken: ct);
         }
 
         private async Task HandleCheckMonthlyCommand(long chatId, CancellationToken ct)
         {
             var monthly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkm/{chatId}", ct);
-            await _botClient.SendTextMessageAsync(chatId, $"Расходы за месяц: {monthly} ₽", cancellationToken: ct);
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: $"Расходы за месяц: {monthly} ₽",
+                cancellationToken: ct);
         }
 
         private async Task HandleUserInput(long chatId, string text, CancellationToken ct)
         {
-            if (!_userStates.TryGetValue(chatId, out var state)) return;
+            if (!_userStates.TryGetValue(chatId, out var state))
+                return;
 
             switch (state.Step)
             {
@@ -109,31 +131,30 @@ namespace TelegramBot.Services
                     state.Amount = amount;
                     state.Step = 2;
 
-
                     var replyKeyboard = new ReplyKeyboardMarkup(new[]
                     {
-                    new KeyboardButton[] { "Пропустить" }
+                        new KeyboardButton[] { "Пропустить" }
                     })
                     {
-                        ResizeKeyboard = true
+                        ResizeKeyboard = true,
+                        OneTimeKeyboard = true
                     };
 
-                    await _botClient.SendTextMessageAsync(
-                        chatId,
-                        "Введите описание расхода:",
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "Введите описание расхода:",
                         replyMarkup: replyKeyboard,
                         cancellationToken: ct);
                     break;
 
                 case 2:
-
                     var removeKeyboard = new ReplyKeyboardRemove();
 
-                    if (text == "Пропустить")
+                    if (text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase))
                     {
-                        await _botClient.SendTextMessageAsync(
-                            chatId,
-                            "Описание пропущено",
+                        await _botClient.SendMessage(
+                            chatId: chatId,
+                            text: "Описание пропущено",
                             replyMarkup: removeKeyboard,
                             cancellationToken: ct);
 
@@ -141,10 +162,10 @@ namespace TelegramBot.Services
                     }
                     else
                     {
-                        await _botClient.SendTextMessageAsync(
-                            chatId,
-                            "Описание сохранено",
-                            replyMarkup: removeKeyboard, 
+                        await _botClient.SendMessage(
+                            chatId: chatId,
+                            text: "Описание сохранено",
+                            replyMarkup: removeKeyboard,
                             cancellationToken: ct);
 
                         await ProcessExpenseCreation(chatId, text, state, ct);
@@ -152,9 +173,9 @@ namespace TelegramBot.Services
                     break;
 
                 default:
-                    await _botClient.SendTextMessageAsync(
-                        chatId,
-                        "Некорректный ввод, попробуйте снова",
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "Некорректный ввод, попробуйте снова",
                         cancellationToken: ct);
                     break;
             }
@@ -170,10 +191,21 @@ namespace TelegramBot.Services
             };
 
             var response = await _httpClient.PostAsJsonAsync("/api/expense", expense, ct);
+
             if (response.IsSuccessStatusCode)
-                await _botClient.SendTextMessageAsync(chatId, "✅ Расход добавлен!", cancellationToken: ct);
+            {
+                await _botClient.SendMessage(
+                    chatId: chatId,
+                    text: "✅ Расход добавлен!",
+                    cancellationToken: ct);
+            }
             else
-                await _botClient.SendTextMessageAsync(chatId, "❌ Ошибка при добавлении", cancellationToken: ct);
+            {
+                await _botClient.SendMessage(
+                    chatId: chatId,
+                    text: "❌ Ошибка при добавлении",
+                    cancellationToken: ct);
+            }
 
             _userStates.Remove(chatId);
         }
