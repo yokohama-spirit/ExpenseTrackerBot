@@ -1,4 +1,5 @@
 ﻿using Telegram.Bot;
+using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
 
 namespace TelegramBot.Services
@@ -72,6 +73,17 @@ namespace TelegramBot.Services
         private async Task HandleCreateCommand(long chatId, CancellationToken ct)
         {
             _userStates[chatId] = new ExpenseCreationState { Step = 1 };
+
+
+            var replyKeyboard = new ReplyKeyboardMarkup(new[]
+            {
+             new KeyboardButton[] { "Пропустить" }
+            })
+            {
+                ResizeKeyboard = true 
+            };
+
+
             await _botClient.SendTextMessageAsync(chatId, "Введите сумму расхода:", cancellationToken: ct);
         }
 
@@ -96,15 +108,54 @@ namespace TelegramBot.Services
                 case 1 when decimal.TryParse(text, out var amount):
                     state.Amount = amount;
                     state.Step = 2;
-                    await _botClient.SendTextMessageAsync(chatId, "Введите описание расхода:", cancellationToken: ct);
+
+
+                    var replyKeyboard = new ReplyKeyboardMarkup(new[]
+                    {
+                    new KeyboardButton[] { "Пропустить" }
+                    })
+                    {
+                        ResizeKeyboard = true
+                    };
+
+                    await _botClient.SendTextMessageAsync(
+                        chatId,
+                        "Введите описание расхода:",
+                        replyMarkup: replyKeyboard,
+                        cancellationToken: ct);
                     break;
 
                 case 2:
-                    await ProcessExpenseCreation(chatId, text, state, ct);
+
+                    var removeKeyboard = new ReplyKeyboardRemove();
+
+                    if (text == "Пропустить")
+                    {
+                        await _botClient.SendTextMessageAsync(
+                            chatId,
+                            "Описание пропущено",
+                            replyMarkup: removeKeyboard,
+                            cancellationToken: ct);
+
+                        await ProcessExpenseCreation(chatId, string.Empty, state, ct);
+                    }
+                    else
+                    {
+                        await _botClient.SendTextMessageAsync(
+                            chatId,
+                            "Описание сохранено",
+                            replyMarkup: removeKeyboard, 
+                            cancellationToken: ct);
+
+                        await ProcessExpenseCreation(chatId, text, state, ct);
+                    }
                     break;
 
                 default:
-                    await _botClient.SendTextMessageAsync(chatId, "Некорректный ввод, попробуйте снова", cancellationToken: ct);
+                    await _botClient.SendTextMessageAsync(
+                        chatId,
+                        "Некорректный ввод, попробуйте снова",
+                        cancellationToken: ct);
                     break;
             }
         }
