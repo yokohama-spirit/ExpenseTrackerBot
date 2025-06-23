@@ -20,7 +20,11 @@ builder.Services.AddDbContext<DatabaseConnect>(options =>
 builder.Services.AddScoped<IExpenseRepository, ExpenseRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 
-
+//Redis
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = builder.Configuration.GetConnectionString("Redis");
+});
 
 var app = builder.Build();
 

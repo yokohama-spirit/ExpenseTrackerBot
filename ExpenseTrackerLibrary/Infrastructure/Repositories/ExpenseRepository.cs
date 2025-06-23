@@ -3,10 +3,12 @@ using ExpenseTrackerLibrary.Domain.Interfaces;
 using ExpenseTrackerLibrary.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Scaffolding.Metadata;
+using Microsoft.Extensions.Caching.Distributed;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace ExpenseTrackerLibrary.Infrastructure.Repositories
@@ -14,13 +16,25 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
     public class ExpenseRepository : IExpenseRepository
     {
         private readonly DatabaseConnect _conn;
+        private readonly IDistributedCache _redisCache;
 
-        public ExpenseRepository(DatabaseConnect conn)
+        public ExpenseRepository
+            (DatabaseConnect conn,
+            IDistributedCache redisCache)
         {
             _conn = conn;
+            _redisCache = redisCache;
         }
         public async Task<decimal> CheckMonthlyExpenses(long chatId)
         {
+            var cacheKey = $"monthly:{chatId}";
+            var cachedData = await _redisCache.GetStringAsync(cacheKey);
+
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                return JsonSerializer.Deserialize<decimal>(cachedData);
+            }
+
             var expenses = _conn.Expenses;
 
             var now = DateTime.UtcNow;
@@ -31,12 +45,30 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
                 .Where(e => e.CreatedAt >= startOfWeek && e.CreatedAt <= now && e.ChatId == chatId)
                 .Sum(e => e.Amount);
 
+            var cacheOptions = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+            };
+
+            await _redisCache.SetStringAsync(
+                cacheKey,
+                JsonSerializer.Serialize(totalAmount),
+                cacheOptions);
+
             return totalAmount;
         }
 
         public async Task<decimal> CheckWeeklyExpenses(long chatId)
         {
-            var expenses = _conn.Expenses; 
+            var cacheKey = $"weekly:{chatId}";
+            var cachedData = await _redisCache.GetStringAsync(cacheKey);
+
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                return JsonSerializer.Deserialize<decimal>(cachedData);
+            }
+
+            var expenses = _conn.Expenses;
 
             var now = DateTime.UtcNow;
 
@@ -46,13 +78,23 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
                 .Where(e => e.CreatedAt >= startOfWeek && e.CreatedAt <= now && e.ChatId == chatId)
                 .Sum(e => e.Amount);
 
+            var cacheOptions = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+            };
+
+            await _redisCache.SetStringAsync(
+                cacheKey,
+                JsonSerializer.Serialize(totalAmount),
+                cacheOptions);
+
             return totalAmount;
         }
 
         public async Task CreateExpense(Expense ex)
         {
-           await _conn.Expenses.AddAsync(ex);
-           await _conn.SaveChangesAsync();
+            await _conn.Expenses.AddAsync(ex);
+            await _conn.SaveChangesAsync();
         }
     }
 }

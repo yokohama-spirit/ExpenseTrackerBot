@@ -2,10 +2,12 @@
 using ExpenseTrackerLibrary.Domain.Interfaces;
 using ExpenseTrackerLibrary.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace ExpenseTrackerLibrary.Infrastructure.Repositories
@@ -13,10 +15,14 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
     public class CategoryRepository : ICategoryRepository
     {
         private readonly DatabaseConnect _conn;
+        private readonly IDistributedCache _redisCache;
 
-        public CategoryRepository(DatabaseConnect conn)
+        public CategoryRepository
+            (DatabaseConnect conn,
+            IDistributedCache redisCache)
         {
             _conn = conn;
+            _redisCache = redisCache;
         }
 
         public async Task CreateCategory(string cat, long chatId)
@@ -33,19 +39,32 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
 
         public async Task<string> GetUserCategoriesString(long chatId)
         {
+            var cacheKey = $"my_categories:{chatId}";
+            var cachedData = await _redisCache.GetStringAsync(cacheKey);
+
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                return JsonSerializer.Deserialize<string>(cachedData);
+            }
+
             var categories = await _conn.Categories
                 .Where(c => c.ChatId == chatId)
                 .ToListAsync();
-            if(categories == null)
+
+            var categoriesString = string.Join(", ", categories.Select(c => c.Name));
+
+            var cacheOptions = new DistributedCacheEntryOptions
             {
-                return "Вы пока не добавляли категории." +
-                    "\nДля создания категории воспользуйтесь /newcat.";
-            }
-            else
-            {
-                var categoriesString = string.Join(", ", categories.Select(c => c.Name));
-                return categoriesString;
-            }
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+            };
+
+            await _redisCache.SetStringAsync(
+                cacheKey,
+                JsonSerializer.Serialize(categoriesString),
+                cacheOptions);
+
+            return categoriesString;
+
         }
     }
 }
