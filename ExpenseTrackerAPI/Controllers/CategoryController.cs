@@ -37,5 +37,12 @@ namespace ExpenseTrackerAPI.Controllers
             var result = await _rep.GetUserCategoriesString(chatId);
             return Ok(result);
         }
+
+        [HttpGet("ix/{name}/{chatId}")]
+        public async Task<ActionResult<bool>> IsExistsCategory(string name, long chatId)
+        {
+            var result = await _rep.isExistsCategory(name, chatId);
+            return Ok(result);
+        }
     }
 }

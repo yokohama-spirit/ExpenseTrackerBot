@@ -11,5 +11,6 @@ namespace ExpenseTrackerLibrary.Domain.Interfaces
     {
         Task CreateCategory(string cat, long chatId);
         Task<string> GetUserCategoriesString(long chatId);
+        Task<bool> isExistsCategory(string categoryName, long chatId);
     }
 }

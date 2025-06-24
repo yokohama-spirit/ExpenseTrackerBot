@@ -1,4 +1,6 @@
 ﻿using ExpenseTrackerLibrary.Domain.Entities;
+using System.Net.Http;
+using System.Text.Json;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
@@ -102,15 +104,29 @@ namespace TelegramBot.Support
                         ? "Не указано"
                         : text;
 
-                    await _botClient.SendMessage(
+                    var getResponse = await _httpClient.GetFromJsonAsync<bool>(
+                    $"/api/category/ix/{category}/{chatId}");
+
+                    if (!getResponse)
+                    {
+                        await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "Категория указана некорректно, в вашем списке категорий её не имеется." +
+                        "\nДля создания категории воспользуйтесь коммандой /newcat.",
+                        cancellationToken: ct);
+                    }
+                    else
+                    {
+                        await _botClient.SendMessage(
                         chatId: chatId,
                         text: text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase)
-                            ? "Категория пропущена"
-                            : "Категория сохранена",
+                        ? "Категория пропущена"
+                        : "Категория сохранена",
                         replyMarkup: removeCatKeyboard,
                         cancellationToken: ct);
 
-                    await ProcessExpenseCreation(chatId, state.Description, category, state, ct);
+                        await ProcessExpenseCreation(chatId, state.Description, category, state, ct);
+                    }
                     break;
 
                 default:
@@ -167,9 +183,10 @@ namespace TelegramBot.Support
                 ChatId = chatId
             };
 
+
+
             if (!categoryName.Equals("Не указано"))
             {
-                expense.Categories ??= new List<Category>(); 
                 expense.Categories.Add(new Category
                 {
                     ChatId = chatId,

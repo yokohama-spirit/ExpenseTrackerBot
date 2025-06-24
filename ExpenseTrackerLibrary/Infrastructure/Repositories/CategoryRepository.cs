@@ -66,5 +66,16 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
             return categoriesString;
 
         }
+
+        public async Task<bool> isExistsCategory(string categoryName, long chatId)
+        {
+            var trimmedName = categoryName.Trim(',').ToLowerInvariant();
+
+            var category = await _conn.Categories
+                .Where(c => c.Name.Trim(',').ToLower() == trimmedName && c.ChatId == chatId)
+                .FirstOrDefaultAsync();
+
+            return category != null;
+        }
     }
 }
