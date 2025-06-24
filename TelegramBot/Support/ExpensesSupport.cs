@@ -1,4 +1,6 @@
-﻿using Telegram.Bot;
+﻿using ExpenseTrackerLibrary.Domain.Entities;
+using Telegram.Bot;
+using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
 
@@ -62,6 +64,7 @@ namespace TelegramBot.Support
                 cancellationToken: ct);
         }
 
+
         public async Task HandleUserInput(long chatId, string text, CancellationToken ct)
         {
             if (!_userStates.TryGetValue(chatId, out var state))
@@ -72,48 +75,42 @@ namespace TelegramBot.Support
                 case 1 when decimal.TryParse(text, out var amount):
                     state.Amount = amount;
                     state.Step = 2;
-
-                    var replyKeyboard = new ReplyKeyboardMarkup(new[]
-                    {
-                        new KeyboardButton[] { "Пропустить" }
-                    })
-                    {
-                        ResizeKeyboard = true,
-                        OneTimeKeyboard = true
-                    };
-
-                    await _botClient.SendMessage(
-                        chatId: chatId,
-                        text: "Введите описание расхода:",
-                        replyMarkup: replyKeyboard,
-                        cancellationToken: ct);
+                    await AskForDescription(chatId, ct);
                     break;
 
                 case 2:
                     var removeKeyboard = new ReplyKeyboardRemove();
+                    state.Description = text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase)
+                        ? "Не указано"
+                        : text;
 
-                    if (text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase))
-                    {
-                        await _botClient.SendMessage(
-                            chatId: chatId,
-                            text: "Описание пропущено",
-                            replyMarkup: removeKeyboard,
-                            cancellationToken: ct);
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase)
+                            ? "Описание пропущено"
+                            : "Описание сохранено",
+                        replyMarkup: removeKeyboard,
+                        cancellationToken: ct);
 
-                        string content = "Не указано";
+                    state.Step = 3;
+                    await AskForCategory(chatId, ct);
+                    break;
 
-                        await ProcessExpenseCreation(chatId, content, state, ct);
-                    }
-                    else
-                    {
-                        await _botClient.SendMessage(
-                            chatId: chatId,
-                            text: "Описание сохранено",
-                            replyMarkup: removeKeyboard,
-                            cancellationToken: ct);
+                case 3:
+                    var removeCatKeyboard = new ReplyKeyboardRemove();
+                    string category = text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase)
+                        ? "Не указано"
+                        : text;
 
-                        await ProcessExpenseCreation(chatId, text, state, ct);
-                    }
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase)
+                            ? "Категория пропущена"
+                            : "Категория сохранена",
+                        replyMarkup: removeCatKeyboard,
+                        cancellationToken: ct);
+
+                    await ProcessExpenseCreation(chatId, state.Description, category, state, ct);
                     break;
 
                 default:
@@ -125,14 +122,60 @@ namespace TelegramBot.Support
             }
         }
 
-        public async Task ProcessExpenseCreation(long chatId, string text, ExpenseCreationState state, CancellationToken ct)
+        private async Task AskForDescription(long chatId, CancellationToken ct)
         {
-            var expense = new ExpenseTrackerLibrary.Domain.Entities.Expense
+            var replyKeyboard = new ReplyKeyboardMarkup(new[]
+            {
+            new KeyboardButton[] { "Пропустить" }
+        })
+            {
+                ResizeKeyboard = true,
+                OneTimeKeyboard = true
+            };
+
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Введите описание расхода:",
+                replyMarkup: replyKeyboard,
+                cancellationToken: ct);
+        }
+
+        private async Task AskForCategory(long chatId, CancellationToken ct)
+        {
+            var replyKeyboard = new ReplyKeyboardMarkup(new[]
+            {
+            new KeyboardButton[] { "Пропустить" }
+        })
+            {
+                ResizeKeyboard = true,
+                OneTimeKeyboard = true
+            };
+
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Введите категорию расхода:",
+                replyMarkup: replyKeyboard,
+                cancellationToken: ct);
+        }
+
+        public async Task ProcessExpenseCreation(long chatId, string description, string categoryName, ExpenseCreationState state, CancellationToken ct)
+        {
+            var expense = new Expense
             {
                 Amount = state.Amount,
-                Content = text,
+                Content = description,
                 ChatId = chatId
             };
+
+            if (!categoryName.Equals("Не указано"))
+            {
+                expense.Categories ??= new List<Category>(); 
+                expense.Categories.Add(new Category
+                {
+                    ChatId = chatId,
+                    Name = categoryName
+                });
+            }
 
             var response = await _httpClient.PostAsJsonAsync("/api/expense", expense, ct);
 
@@ -151,7 +194,7 @@ namespace TelegramBot.Support
                     cancellationToken: ct);
             }
 
-            _userStates.Remove(chatId);
+            _userStates.Remove(chatId); 
         }
 
         public Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)

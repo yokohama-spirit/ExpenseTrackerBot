@@ -18,7 +18,7 @@ namespace ExpenseTrackerAPI.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Createcategory([FromBody] CreateCategoryDTO command)
+        public async Task<IActionResult> CreateCategory([FromBody] CreateCategoryDTO command)
         {
             try
             {
