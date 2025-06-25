@@ -27,13 +27,23 @@ namespace TelegramBot.Support
         {
             await _botClient.SendMessage(
                 chatId: chatId,
-                text: "Привет! Это бот для подсчета твоих трат.\n" +
-                      "Доступные команды:\n" +
+                text: "Привет! Это бот для подсчета твоих расходов.\n" +
+                      "Для получения всех доступных комманд пропиши /commands",
+                cancellationToken: ct);
+        }
+
+        public async Task HandleCommsCommand(long chatId, CancellationToken ct)
+        {
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Доступные команды:\n" +
                       "/create - добавить расход\n" +
-                      "/checkw - расходы за неделю\n" +
-                      "/checkm - расходы за месяц\n" +
+                      "/weekly - расходы за неделю\n" +
+                      "/monthly - расходы за месяц\n" +
                       "/newcat - создание новой категории расходов\n" +
-                      "/mycat - получение своих категорий",
+                      "/mycat - получение своих категорий\n" +
+                      "/weeklyc - получение расходов за неделю по определенной категории\n" +
+                      "/monthlyc - получение расходов за месяц по определенной категории",
                 cancellationToken: ct);
         }
 
@@ -105,9 +115,20 @@ namespace TelegramBot.Support
                         : text;
 
                     var getResponse = await _httpClient.GetFromJsonAsync<bool>(
-                    $"/api/category/ix/{category}/{chatId}");
+                        $"/api/category/ix/{category}/{chatId}");
 
-                    if (!getResponse)
+
+                    if (text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "Категория пропущена",
+                        replyMarkup: removeCatKeyboard,
+                        cancellationToken: ct);
+
+                        await ProcessExpenseCreation(chatId, state.Description, category, state, ct);
+                    }
+                    else if (!getResponse)
                     {
                         await _botClient.SendMessage(
                         chatId: chatId,
@@ -119,14 +140,13 @@ namespace TelegramBot.Support
                     {
                         await _botClient.SendMessage(
                         chatId: chatId,
-                        text: text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase)
-                        ? "Категория пропущена"
-                        : "Категория сохранена",
+                        text: "Категория сохранена",
                         replyMarkup: removeCatKeyboard,
                         cancellationToken: ct);
 
                         await ProcessExpenseCreation(chatId, state.Description, category, state, ct);
                     }
+
                     break;
 
                 default:

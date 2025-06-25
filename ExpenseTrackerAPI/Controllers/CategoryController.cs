@@ -31,6 +31,21 @@ namespace ExpenseTrackerAPI.Controllers
             }
         }
 
+
+        [HttpGet("checkm/{name}/{chatId}")]
+        public async Task<ActionResult<decimal>> CheckMonthlyByCategory(string name, long chatId)
+        {
+            var result = await _rep.CheckMonthlyByCategory(name, chatId);
+            return result;
+        }
+
+        [HttpGet("checkw/{name}/{chatId}")]
+        public async Task<ActionResult<decimal>> CheckWeeklyByCategory(string name, long chatId)
+        {
+            var result = await _rep.CheckWeeklyByCategory(name, chatId);
+            return result;
+        }
+
         [HttpGet("mycat/{chatId}")]
         public async Task<ActionResult<string>> GetMyCategories(long chatId)
         {

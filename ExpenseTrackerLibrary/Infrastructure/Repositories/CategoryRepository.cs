@@ -55,7 +55,7 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
 
             var cacheOptions = new DistributedCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1)
             };
 
             await _redisCache.SetStringAsync(
@@ -66,6 +66,96 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
             return categoriesString;
 
         }
+
+        public async Task<decimal> CheckMonthlyByCategory(string name, long chatId)
+        {
+            var cacheKey = $"monthly_cat:{chatId}";
+            var cachedData = await _redisCache.GetStringAsync(cacheKey);
+
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                return JsonSerializer.Deserialize<decimal>(cachedData);
+            }
+
+            var expenses = _conn.Expenses;
+
+            var now = DateTime.UtcNow;
+
+            var startOfMonth = now.AddMonths(-1);
+
+            var cat = await _conn.Categories
+                .FirstOrDefaultAsync(c => c.Name == name);
+
+            if(cat == null)
+            {
+                return 0;
+            }
+
+            var totalAmount = expenses
+                .Where(e => e.CreatedAt >= startOfMonth
+                && e.CreatedAt <= now
+                && e.ChatId == chatId
+                && e.Categories.Any(c => c.Name == name))
+                .Sum(e => e.Amount);
+
+            var cacheOptions = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1)
+            };
+
+            await _redisCache.SetStringAsync(
+                cacheKey,
+                JsonSerializer.Serialize(totalAmount),
+                cacheOptions);
+
+            return totalAmount;
+        }
+
+        public async Task<decimal> CheckWeeklyByCategory(string name, long chatId)
+        {
+            var cacheKey = $"weekly_cat:{chatId}";
+            var cachedData = await _redisCache.GetStringAsync(cacheKey);
+
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                return JsonSerializer.Deserialize<decimal>(cachedData);
+            }
+
+            var expenses = _conn.Expenses;
+
+            var now = DateTime.UtcNow;
+
+            var startOfWeek = now.AddDays(-7);
+
+            var cat = await _conn.Categories
+                .FirstOrDefaultAsync(c => c.Name == name && c.ChatId == chatId);
+
+            if (cat == null)
+            {
+                return 0;
+            }
+
+            var totalAmount = expenses
+                .Where(e => e.CreatedAt >= startOfWeek 
+                && e.CreatedAt <= now 
+                && e.ChatId == chatId 
+                && e.Categories.Any(c => c.Name == name))
+                .Sum(e => e.Amount);
+
+            var cacheOptions = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1)
+            };
+
+            await _redisCache.SetStringAsync(
+                cacheKey,
+                JsonSerializer.Serialize(totalAmount),
+                cacheOptions);
+
+            return totalAmount;
+        }
+
+
 
         public async Task<bool> isExistsCategory(string categoryName, long chatId)
         {

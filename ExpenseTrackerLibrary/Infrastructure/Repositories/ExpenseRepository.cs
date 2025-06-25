@@ -39,10 +39,10 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
 
             var now = DateTime.UtcNow;
 
-            var startOfWeek = now.AddMonths(-1);
+            var startOfMonth = now.AddMonths(-1);
 
             var totalAmount = expenses
-                .Where(e => e.CreatedAt >= startOfWeek && e.CreatedAt <= now && e.ChatId == chatId)
+                .Where(e => e.CreatedAt >= startOfMonth && e.CreatedAt <= now && e.ChatId == chatId)
                 .Sum(e => e.Amount);
 
             var cacheOptions = new DistributedCacheEntryOptions
