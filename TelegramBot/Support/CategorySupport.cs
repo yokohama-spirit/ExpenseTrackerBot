@@ -220,6 +220,7 @@ namespace TelegramBot.Support
         }
 
 
+
         public async Task HandleWeeklyCommand(long chatId, CancellationToken ct)
         {
 
@@ -414,8 +415,9 @@ namespace TelegramBot.Support
         private async Task StateRemover(string text, long chatId, CancellationToken ct)
         {
             bool textIs = text == "/days" || text == "/create" || text == "/weekly"
-            || text == "/monthly" || text == "/newcat" || text == "/mycat"
-            || text == "/monthlyc" || text == "/start" || text == "/commands";
+            || text == "/monthly" || text == "/newcat" || text == "/mycat" 
+            || text == "/weeklyc" || text == "/monthlyc" 
+            || text == "/start" || text == "/commands";
             if (textIs)
             {
                 await ClearAllStates(chatId, ct);

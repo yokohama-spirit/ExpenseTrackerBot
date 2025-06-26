@@ -30,13 +30,15 @@ namespace TelegramBot.Support
 
         public async Task HandleStartCommand(long chatId, CancellationToken ct)
         {
+            var chat = await _botClient.GetChat(chatId, ct);
+
             if (_userStates.TryGetValue(chatId, out var state) || await _service.Value.isActive(chatId, ct))
             {
                 await ClearAllStates(chatId, ct);
             }
             await _botClient.SendMessage(
                 chatId: chatId,
-                text: "Привет! Это бот для подсчета твоих расходов.\n" +
+                text: $"Привет, {chat.FirstName ?? "друг"}! Это бот для подсчета твоих расходов.\n" +
                       "Для получения всех доступных комманд пропиши /commands",
                 cancellationToken: ct);
         }
@@ -205,7 +207,7 @@ namespace TelegramBot.Support
 
             await _botClient.SendMessage(
                 chatId: chatId,
-                text: "Введите описание расхода:",
+                text: "Введите описание расхода (зачем, когда, на кого и т.д.):",
                 replyMarkup: replyKeyboard,
                 cancellationToken: ct);
         }
