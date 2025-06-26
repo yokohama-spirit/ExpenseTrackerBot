@@ -57,7 +57,7 @@ namespace ExpenseTrackerAPI.Controllers
         public async Task<ActionResult<bool>> IsExistsCategory(string name, long chatId)
         {
             var result = await _rep.isExistsCategory(name, chatId);
-            return Ok(result);
+            return result;
         }
     }
 }

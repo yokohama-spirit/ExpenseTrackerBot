@@ -5,6 +5,7 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
+using TelegramBot.Services;
 
 namespace TelegramBot.Support
 {
@@ -14,17 +15,25 @@ namespace TelegramBot.Support
         private readonly HttpClient _httpClient;
         private readonly Dictionary<long, ExpenseCreationState> _userStates;
         private readonly TelegramBotConfig _config;
+        private readonly Lazy<ITelegramBotService> _service;
 
-        public ExpensesSupport(TelegramBotConfig config)
+        public ExpensesSupport
+            (TelegramBotConfig config,
+            Lazy<ITelegramBotService> service)
         {
             _config = config;
             _botClient = new TelegramBotClient(_config.Token);
             _httpClient = new HttpClient { BaseAddress = new Uri(_config.ApiBaseUrl) };
             _userStates = new Dictionary<long, ExpenseCreationState>();
+            _service = service;
         }
 
         public async Task HandleStartCommand(long chatId, CancellationToken ct)
         {
+            if (_userStates.TryGetValue(chatId, out var state) || await _service.Value.isActive(chatId, ct))
+            {
+                await ClearAllStates(chatId, ct);
+            }
             await _botClient.SendMessage(
                 chatId: chatId,
                 text: "Привет! Это бот для подсчета твоих расходов.\n" +
@@ -34,6 +43,10 @@ namespace TelegramBot.Support
 
         public async Task HandleCommsCommand(long chatId, CancellationToken ct)
         {
+            if (_userStates.TryGetValue(chatId, out var state) || await _service.Value.isActive(chatId, ct))
+            {
+                await ClearAllStates(chatId, ct);
+            }
             await _botClient.SendMessage(
                 chatId: chatId,
                 text: "Доступные команды:\n" +
@@ -43,12 +56,18 @@ namespace TelegramBot.Support
                       "/newcat - создание новой категории расходов\n" +
                       "/mycat - получение своих категорий\n" +
                       "/weeklyc - получение расходов за неделю по определенной категории\n" +
-                      "/monthlyc - получение расходов за месяц по определенной категории",
+                      "/monthlyc - получение расходов за месяц по определенной категории\n" +
+                      "/days - получение расходов за любое кол-во дней",
                 cancellationToken: ct);
         }
 
         public async Task HandleCreateCommand(long chatId, CancellationToken ct)
         {
+            if (_userStates.TryGetValue(chatId, out var state) || await _service.Value.isActive(chatId, ct))
+            {
+                await ClearAllStates(chatId, ct);
+            }
+
             _userStates[chatId] = new ExpenseCreationState { Step = 1 };
 
 
@@ -60,6 +79,10 @@ namespace TelegramBot.Support
 
         public async Task HandleCheckWeeklyCommand(long chatId, CancellationToken ct)
         {
+            if (_userStates.TryGetValue(chatId, out var state) || await _service.Value.isActive(chatId, ct))
+            {
+                await ClearAllStates(chatId, ct);
+            }
             var weekly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkw/{chatId}", ct);
             await _botClient.SendMessage(
                 chatId: chatId,
@@ -69,6 +92,10 @@ namespace TelegramBot.Support
 
         public async Task HandleCheckMonthlyCommand(long chatId, CancellationToken ct)
         {
+            if (_userStates.TryGetValue(chatId, out var state))
+            {
+                await ClearAllStates(chatId, ct);
+            }
             var monthly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkm/{chatId}", ct);
             await _botClient.SendMessage(
                 chatId: chatId,
@@ -79,6 +106,8 @@ namespace TelegramBot.Support
 
         public async Task HandleUserInput(long chatId, string text, CancellationToken ct)
         {
+            await StateRemover(text, chatId, ct);
+
             if (!_userStates.TryGetValue(chatId, out var state))
                 return;
 
@@ -109,6 +138,11 @@ namespace TelegramBot.Support
                     break;
 
                 case 3:
+                    if (text.StartsWith("/"))
+                    {
+                        await ClearAllStates(chatId, ct);
+                    }
+
                     var removeCatKeyboard = new ReplyKeyboardRemove();
                     string category = text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase)
                         ? "Не указано"
@@ -238,6 +272,43 @@ namespace TelegramBot.Support
         {
             Console.WriteLine($"Ошибка: {ex.Message}");
             return Task.CompletedTask;
+        }
+
+        private async Task ClearAllStates(long chatId, CancellationToken ct)
+        {
+            _userStates.Remove(chatId);
+            await _service.Value.ClearAllStatesNoUser(chatId, ct);
+
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "❌ Команда отменена.\n" +
+                "Для использования новой команды пропишите ее еще раз.",
+                replyMarkup: new ReplyKeyboardRemove(),
+                cancellationToken: ct);
+        }
+
+        public async Task ClearUserState(long chatId, CancellationToken ct)
+        {
+            _userStates.Remove(chatId);
+        }
+
+        private async Task StateRemover(string text, long chatId, CancellationToken ct)
+        {
+            bool textIs = text == "/days" || text == "/create" || text == "/weekly"
+            || text == "/monthly" || text == "/newcat" || text == "/mycat"
+            || text == "/monthlyc" || text == "/start" || text == "/commands";
+            if (textIs)
+            {
+                await ClearAllStates(chatId, ct);
+            }
+        }
+
+
+        public async Task<bool> isActive(long chatId, CancellationToken ct)
+        {
+            if (_userStates.TryGetValue(chatId, out var state))
+                return true;
+            return false;
         }
     }
 }

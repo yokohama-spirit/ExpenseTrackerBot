@@ -19,6 +19,7 @@ namespace TelegramBot.Services
         private readonly Dictionary<long, CategoryCreationState> _userCatStates;
         private readonly Dictionary<long, CategoryCheckStateW> _checkByCatStates;
         private readonly Dictionary<long, CategoryCheckStateM> _checkByCatStatesM;
+        private readonly Dictionary<long, CustomDaysCheck> _daysStates;
         private readonly TelegramBotConfig _config;
         private readonly IExpensesSupport _ex;
 
@@ -33,6 +34,7 @@ namespace TelegramBot.Services
             _userCatStates = new Dictionary<long, CategoryCreationState>();
             _checkByCatStates = new Dictionary<long, CategoryCheckStateW>();
             _checkByCatStatesM = new Dictionary<long, CategoryCheckStateM>();
+            _daysStates = new Dictionary<long, CustomDaysCheck>();
             _ex = ex;
         }
 
@@ -79,6 +81,13 @@ namespace TelegramBot.Services
                 return;
             }
 
+            if (_daysStates.ContainsKey(chatId))
+            {
+                await HandleDaysInputCommand(chatId, text, ct);
+                return;
+            }
+
+
             switch (text)
             {
                 case "/start":
@@ -117,6 +126,10 @@ namespace TelegramBot.Services
                     await HandleMonthlyCommand(chatId, ct);
                     break;
 
+                case "/days":
+                    await HandleDaysCommand(chatId, ct);
+                    break;
+
                 default:
                     await _ex.HandleUserInput(chatId, text, ct);
                     break;
@@ -124,6 +137,7 @@ namespace TelegramBot.Services
         }
         public async Task HandleCreateCommand(long chatId, CancellationToken ct)
         {
+
             Console.WriteLine($"Получена команда /newcat от chatId: {chatId}");
 
             _userCatStates[chatId] = new CategoryCreationState
@@ -142,6 +156,8 @@ namespace TelegramBot.Services
 
         public async Task HandleCategoryUserInput(long chatId, string text, CancellationToken ct)
         {
+            await StateRemover(text, chatId, ct);
+
             if (!_userCatStates.TryGetValue(chatId, out var state))
             {
                 Console.WriteLine($"Не найдено состояние для chatId {chatId}");  
@@ -216,6 +232,17 @@ namespace TelegramBot.Services
 
         public async Task HandleMyCategoriesCommand(long chatId, CancellationToken ct)
         {
+            bool isActive = _userStates.TryGetValue(chatId, out var state)
+    || _userCatStates.TryGetValue(chatId, out var catState)
+    || _checkByCatStates.TryGetValue(chatId, out var checkState)
+    || _checkByCatStatesM.TryGetValue(chatId, out var checkStateM)
+    || _daysStates.TryGetValue(chatId, out var daysStates)
+    || await _ex.isActive(chatId, ct);
+
+            if (isActive)
+            {
+                await ClearAllStates(chatId, ct);
+            }
             try
             {
                 var response = await _httpClient.GetAsync($"/api/category/mycat/{chatId}", ct);
@@ -272,7 +299,6 @@ namespace TelegramBot.Services
 
         public async Task HandleWeeklyCommand(long chatId, CancellationToken ct)
         {
-            Console.WriteLine($"Получена команда /newcat от chatId: {chatId}");
 
             _checkByCatStates[chatId] = new CategoryCheckStateW
             {
@@ -289,6 +315,9 @@ namespace TelegramBot.Services
 
         public async Task HandleWeeklyInputCommand(long chatId, string text, CancellationToken ct)
         {
+            await StateRemover(text, chatId, ct);
+
+
             if (!_checkByCatStates.TryGetValue(chatId, out var state))
             {
                 Console.WriteLine($"Не найдено состояние для chatId {chatId}");
@@ -336,7 +365,6 @@ namespace TelegramBot.Services
 
         public async Task HandleMonthlyCommand(long chatId, CancellationToken ct)
         {
-            Console.WriteLine($"Получена команда /newcat от chatId: {chatId}");
 
             _checkByCatStatesM[chatId] = new CategoryCheckStateM
             {
@@ -353,6 +381,8 @@ namespace TelegramBot.Services
 
         public async Task HandleMonthlyInputCommand(long chatId, string text, CancellationToken ct)
         {
+            await StateRemover(text, chatId, ct);
+
             if (!_checkByCatStatesM.TryGetValue(chatId, out var state))
             {
                 Console.WriteLine($"Не найдено состояние для chatId {chatId}");
@@ -396,5 +426,103 @@ namespace TelegramBot.Services
                     break;
             }
         }
+
+        public async Task HandleDaysCommand(long chatId, CancellationToken ct)
+        {
+
+            _daysStates[chatId] = new CustomDaysCheck
+            {
+                Step = 1
+            };
+
+            Console.WriteLine($"Состояние для {chatId} установлено: {nameof(CategoryCreationState)}");
+
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Введите кол-во дней, за которое хотите получить отсчет:",
+                cancellationToken: ct);
+        }
+
+        public async Task HandleDaysInputCommand(long chatId, string text, CancellationToken ct)
+        {
+            await StateRemover(text, chatId, ct);
+
+            if (!_daysStates.TryGetValue(chatId, out var state))
+            {
+                Console.WriteLine($"Не найдено состояние для chatId {chatId}");
+                return;
+            }
+
+
+            switch (state.Step)
+            {
+                case 1 when decimal.TryParse(text, out var days):
+
+                    var response = await _httpClient.GetFromJsonAsync<decimal>(
+                    $"/api/expense/custom/{days}/{chatId}");
+
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: $"За {days} дней вы потратили: {response}",
+                        cancellationToken: ct);
+                    _daysStates.Remove(chatId);
+                    break;
+
+
+                default:
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "Некорректный ввод, попробуйте снова",
+                        cancellationToken: ct);
+                    break;
+            }
+        }
+
+        private async Task ClearAllStates(long chatId, CancellationToken ct)
+        {
+            await _ex.ClearUserState(chatId, ct);
+            _userStates.Remove(chatId);
+            _userCatStates.Remove(chatId);
+            _checkByCatStates.Remove(chatId);
+            _checkByCatStatesM.Remove(chatId);
+            _daysStates.Remove(chatId);
+
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "❌ Команда отменена.\n" +
+                "Для использования новой команды пропишите ее еще раз.",
+                replyMarkup: new ReplyKeyboardRemove(),
+                cancellationToken: ct);
+        }
+
+        public async Task ClearAllStatesNoUser(long chatId, CancellationToken ct)
+        {
+            _userStates.Remove(chatId);
+            _userCatStates.Remove(chatId);
+            _checkByCatStates.Remove(chatId);
+            _checkByCatStatesM.Remove(chatId);
+            _daysStates.Remove(chatId);
+        }
+
+        private async Task StateRemover(string text, long chatId, CancellationToken ct)
+        {
+            bool textIs = text == "/days" || text == "/create" || text == "/weekly"
+            || text == "/monthly" || text == "/newcat" || text == "/mycat"
+            || text == "/monthlyc" || text == "/start" || text == "/commands";
+            if (textIs)
+            {
+                await ClearAllStates(chatId, ct);
+            }
+        }
+
+        public async Task<bool> isActive(long chatId, CancellationToken ct)
+        {
+            return _userStates.TryGetValue(chatId, out var state)
+            || _userCatStates.TryGetValue(chatId, out var catState)
+            || _checkByCatStates.TryGetValue(chatId, out var checkState)
+            || _checkByCatStatesM.TryGetValue(chatId, out var checkStateM)
+            || _daysStates.TryGetValue(chatId, out var daysStates);
+        }
+
     }
 }

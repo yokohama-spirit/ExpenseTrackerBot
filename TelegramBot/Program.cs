@@ -7,14 +7,18 @@ var builder = WebApplication.CreateBuilder(args);
 // Bot config
 var botConfig = new TelegramBotConfig
 {
-    Token = "8072496681:AAGjLFDlInucYN0wHrWyzfMgzLO1g1wROZ4",
-    ApiBaseUrl = "https://localhost:3101"
+    Token = builder.Configuration["TelegramBotConfig:Token"],
+    ApiBaseUrl = builder.Configuration["TelegramBotConfig:ApiBaseUrl"] 
 };
 
 // DI
 builder.Services.AddSingleton(botConfig);
 builder.Services.AddSingleton<ITelegramBotService, TelegramBotService>();
-builder.Services.AddSingleton<IExpensesSupport, ExpensesSupport>();
+builder.Services.AddSingleton<IExpensesSupport>(provider =>
+    new ExpensesSupport(
+        botConfig,
+        new Lazy<ITelegramBotService>(provider.GetRequiredService<ITelegramBotService>)
+    ));
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

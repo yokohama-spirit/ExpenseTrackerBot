@@ -49,5 +49,12 @@ namespace ExpenseTrackerAPI.Controllers
             var result = await _rep.CheckMonthlyExpenses(chatId);
             return result;
         }
+
+        [HttpGet("custom/{days}/{chatId}")]
+        public async Task<decimal> CheckCustomTimeDays(int days, long chatId)
+        {
+            var result = await _rep.CheckCustomTimeDays(days, chatId);
+            return result;
+        }
     }
 }

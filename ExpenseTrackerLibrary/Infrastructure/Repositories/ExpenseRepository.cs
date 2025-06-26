@@ -25,6 +25,40 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
             _conn = conn;
             _redisCache = redisCache;
         }
+
+        public async Task<decimal> CheckCustomTimeDays(int days, long chatId)
+        {
+            var cacheKey = $"custom:{chatId}:{days}";
+            var cachedData = await _redisCache.GetStringAsync(cacheKey);
+
+            if (!string.IsNullOrEmpty(cachedData))
+            {
+                return JsonSerializer.Deserialize<decimal>(cachedData);
+            }
+
+            var expenses = _conn.Expenses;
+
+            var now = DateTime.UtcNow;
+
+            var startOfMonth = now.AddDays(-days);
+
+            var totalAmount = expenses
+                .Where(e => e.CreatedAt >= startOfMonth && e.CreatedAt <= now && e.ChatId == chatId)
+                .Sum(e => e.Amount);
+
+            var cacheOptions = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1)
+            };
+
+            await _redisCache.SetStringAsync(
+                cacheKey,
+                JsonSerializer.Serialize(totalAmount),
+                cacheOptions);
+
+            return totalAmount;
+        }
+
         public async Task<decimal> CheckMonthlyExpenses(long chatId)
         {
             var cacheKey = $"monthly:{chatId}";
