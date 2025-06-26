@@ -1,18 +1,13 @@
 ﻿using ExpenseTrackerLibrary.Application.Dto;
-using ExpenseTrackerLibrary.Domain.Entities;
 using Telegram.Bot;
-using Telegram.Bot.Polling;
-using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
-using TelegramBot.Support;
-using static System.Net.Mime.MediaTypeNames;
 
-namespace TelegramBot.Services
+namespace TelegramBot.Support
 {
-    public class TelegramBotService : ITelegramBotService
+    public class CategorySupport : ICategorySupport
     {
+
         private readonly ITelegramBotClient _botClient;
         private readonly HttpClient _httpClient;
         private readonly Dictionary<long, ExpenseCreationState> _userStates;
@@ -22,12 +17,10 @@ namespace TelegramBot.Services
         private readonly Dictionary<long, CustomDaysCheck> _daysStates;
         private readonly TelegramBotConfig _config;
         private readonly IExpensesSupport _ex;
-        private readonly ICategorySupport _cat;
 
-        public TelegramBotService
+        public CategorySupport
             (TelegramBotConfig config,
-            IExpensesSupport ex,
-            ICategorySupport cat)
+            IExpensesSupport ex)
         {
             _config = config;
             _botClient = new TelegramBotClient(_config.Token);
@@ -38,106 +31,46 @@ namespace TelegramBot.Services
             _checkByCatStatesM = new Dictionary<long, CategoryCheckStateM>();
             _daysStates = new Dictionary<long, CustomDaysCheck>();
             _ex = ex;
-            _cat = cat;
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
+        public async Task<bool> isActiveUserCatStates(long chatId)
         {
-            var receiverOptions = new ReceiverOptions
+            if (_userCatStates.ContainsKey(chatId))
             {
-                AllowedUpdates = Array.Empty<UpdateType>() 
-            };
-
-            _botClient.StartReceiving(
-                updateHandler: HandleUpdateAsync,
-                errorHandler: HandleErrorAsync, 
-                receiverOptions: receiverOptions,
-                cancellationToken: cancellationToken
-            );
-
-            Console.WriteLine("Бот запущен. Нажмите Ctrl+C для остановки...");
+                return true;
+            }
+            return false;
         }
 
-        private async Task HandleUpdateAsync(ITelegramBotClient bot, Update update, CancellationToken ct)
+
+
+        public async Task<bool> isActiveCheckByCatStates(long chatId)
         {
-            if (update.Message is not { Text: { } text } message)
-                return;
-
-            long chatId = message.Chat.Id;
-
-            switch (text)
+            if (_checkByCatStates.ContainsKey(chatId))
             {
-                case "/start":
-                    await _ex.HandleStartCommand(chatId, ct);
-                    break;
-
-                case "/commands":
-                    await _ex.HandleCommsCommand(chatId, ct);
-                    break;
-
-                case "/create":
-                    await _ex.HandleCreateCommand(chatId, ct);
-                    break;
-
-                case "/weekly":
-                    await _ex.HandleCheckWeeklyCommand(chatId, ct);
-                    break;
-
-                case "/monthly":
-                    await _ex.HandleCheckMonthlyCommand(chatId, ct);
-                    break;
-
-                case "/newcat":
-                    await _cat.HandleCreateCommand(chatId, ct);
-                    break;
-
-                case "/mycat":
-                    await _cat.HandleMyCategoriesCommand(chatId, ct);
-                    break;
-
-                case "/weeklyc":
-                    await _cat.HandleWeeklyCommand(chatId, ct);
-                    break;
-
-                case "/monthlyc":
-                    await _cat.HandleMonthlyCommand(chatId, ct);
-                    break;
-
-                case "/days":
-                    await _cat.HandleDaysCommand(chatId, ct);
-                    break;
-
-                default:
-                    await _ex.HandleUserInput(chatId, text, ct);
-                    break;
+                return true;
             }
-
-
-            if (await _cat.isActiveUserCatStates(chatId))
-            {
-                await HandleCategoryUserInput(chatId, text, ct);
-                return;
-            }
-
-            if (await _cat.isActiveCheckByCatStates(chatId))
-            {
-                await HandleWeeklyInputCommand(chatId, text, ct);
-                return;
-            }
-
-            if (await _cat.isActiveCheckByCatStatesM(chatId))
-            {
-                await HandleMonthlyInputCommand(chatId, text, ct);
-                return;
-            }
-
-            if (await _cat.isActiveDaysStates(chatId))
-            {
-                await HandleDaysInputCommand(chatId, text, ct);
-                return;
-            }
-
+            return false;
         }
+
+        public async Task<bool> isActiveCheckByCatStatesM(long chatId)
+        {
+            if (_checkByCatStatesM.ContainsKey(chatId))
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public async Task<bool> isActiveDaysStates(long chatId)
+        {
+            if (_daysStates.ContainsKey(chatId))
+            {
+                return true;
+            }
+            return false;
+        }
+
         public async Task HandleCreateCommand(long chatId, CancellationToken ct)
         {
 
@@ -163,7 +96,7 @@ namespace TelegramBot.Services
 
             if (!_userCatStates.TryGetValue(chatId, out var state))
             {
-                Console.WriteLine($"Не найдено состояние для chatId {chatId}");  
+                Console.WriteLine($"Не найдено состояние для chatId {chatId}");
                 return;
             }
 
@@ -286,19 +219,6 @@ namespace TelegramBot.Services
             }
         }
 
-        private Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)
-        {
-            Console.WriteLine($"Ошибка: {ex.Message}");
-            return Task.CompletedTask;
-        }
-
-
-
-
-
-
-
-
 
         public async Task HandleWeeklyCommand(long chatId, CancellationToken ct)
         {
@@ -331,7 +251,7 @@ namespace TelegramBot.Services
             switch (state.Step)
             {
                 case 1:
-                    
+
                     var getResponse = await _httpClient.GetFromJsonAsync<bool>(
                     $"/api/category/ix/{text}/{chatId}");
 
@@ -481,22 +401,6 @@ namespace TelegramBot.Services
             }
         }
 
-        private async Task ClearAllStates(long chatId, CancellationToken ct)
-        {
-            await _ex.ClearUserState(chatId, ct);
-            _userStates.Remove(chatId);
-            _userCatStates.Remove(chatId);
-            _checkByCatStates.Remove(chatId);
-            _checkByCatStatesM.Remove(chatId);
-            _daysStates.Remove(chatId);
-
-            await _botClient.SendMessage(
-                chatId: chatId,
-                text: "❌ Команда отменена.\n" +
-                "Для использования новой команды пропишите ее еще раз.",
-                replyMarkup: new ReplyKeyboardRemove(),
-                cancellationToken: ct);
-        }
 
         public async Task ClearAllStatesNoUser(long chatId, CancellationToken ct)
         {
@@ -527,5 +431,21 @@ namespace TelegramBot.Services
             || _daysStates.TryGetValue(chatId, out var daysStates);
         }
 
+        public async Task ClearAllStates(long chatId, CancellationToken ct)
+        {
+            await _ex.ClearUserState(chatId, ct);
+            _userStates.Remove(chatId);
+            _userCatStates.Remove(chatId);
+            _checkByCatStates.Remove(chatId);
+            _checkByCatStatesM.Remove(chatId);
+            _daysStates.Remove(chatId);
+
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "❌ Команда отменена.\n" +
+                "Для использования новой команды пропишите ее еще раз.",
+                replyMarkup: new ReplyKeyboardRemove(),
+                cancellationToken: ct);
+        }
     }
 }

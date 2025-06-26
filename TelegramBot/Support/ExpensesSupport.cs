@@ -15,11 +15,11 @@ namespace TelegramBot.Support
         private readonly HttpClient _httpClient;
         private readonly Dictionary<long, ExpenseCreationState> _userStates;
         private readonly TelegramBotConfig _config;
-        private readonly Lazy<ITelegramBotService> _service;
+        private readonly Lazy<ICategorySupport> _service;
 
         public ExpensesSupport
             (TelegramBotConfig config,
-            Lazy<ITelegramBotService> service)
+            Lazy<ICategorySupport> service)
         {
             _config = config;
             _botClient = new TelegramBotClient(_config.Token);
