@@ -422,7 +422,7 @@ namespace TelegramBot.Support
             bool textIs = text == "/days" || text == "/create" || text == "/weekly"
             || text == "/monthly" || text == "/newcat" || text == "/mycat" 
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
-            || text == "/start" || text == "/commands";
+            || text == "/start" || text == "/commands" || text == "/statistic";
             if (textIs)
             {
                 await ClearAllStates(chatId, ct);

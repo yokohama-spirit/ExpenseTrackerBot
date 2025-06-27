@@ -17,6 +17,7 @@ namespace TelegramBot.Support
         Task HandleMyExpensesCommand(long chatId, CancellationToken ct);
         Task HandleMyExpensesInputCommand(long chatId, string text, CancellationToken ct);
         Task<bool> isActiveExpCheck(long chatId);
+        Task HandleStatisticCommand(long chatId, CancellationToken ct);
         Task ClearUserState(long chatId, CancellationToken ct);
     }
 }

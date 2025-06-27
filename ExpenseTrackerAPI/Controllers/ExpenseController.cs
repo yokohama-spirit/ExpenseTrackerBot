@@ -16,6 +16,8 @@ namespace ExpenseTrackerAPI.Controllers
             _rep = rep;
         }
 
+
+
         [HttpPost]
         public async Task<IActionResult> CreateExpense
             ([FromBody] Expense command)
@@ -37,8 +39,16 @@ namespace ExpenseTrackerAPI.Controllers
         }
 
 
+        [HttpGet("statistic/{chatId}")]
+        public async Task<string> GenerateMonthlyStats(long chatId)
+        {
+            var result = await _rep.GenerateMonthlyStats(chatId);
+            return result;
+        }
+
+
         [HttpGet("format/{chatId}/{count}")]
-        public async Task<string> CheckWeeklyExpenses(long chatId, int count)
+        public async Task<string> FormatExpenses(long chatId, int count)
         {
             var result = await _rep.FormatExpenses(chatId, count);
             return result;

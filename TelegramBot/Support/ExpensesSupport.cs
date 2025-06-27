@@ -55,6 +55,7 @@ namespace TelegramBot.Support
                 chatId: chatId,
                 text: "Доступные команды:\n" +
                       "/create - добавить расход\n" +
+                      "/statistic - получение статистики\n" +
                       "/weekly - расходы за неделю\n" +
                       "/monthly - расходы за месяц\n" +
                       "/newcat - создание новой категории расходов\n" +
@@ -84,10 +85,10 @@ namespace TelegramBot.Support
 
         public async Task HandleCheckWeeklyCommand(long chatId, CancellationToken ct)
         {
-            if (_userStates.TryGetValue(chatId, out var state) || await _service.Value.isActive(chatId, ct))
-            {
-                await ClearAllStates(chatId, ct);
-            }
+            if (await TryCancelState("/weekly", chatId, ct))
+                return;
+
+
             var weekly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkw/{chatId}", ct);
 
             var removeKeyboard = new ReplyKeyboardRemove();
@@ -100,10 +101,10 @@ namespace TelegramBot.Support
 
         public async Task HandleCheckMonthlyCommand(long chatId, CancellationToken ct)
         {
-            if (_userStates.TryGetValue(chatId, out var state))
-            {
-                await ClearAllStates(chatId, ct);
-            }
+            if (await TryCancelState("/monthly", chatId, ct))
+                return;
+
+
             var monthly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkm/{chatId}", ct);
 
             var removeKeyboard = new ReplyKeyboardRemove();
@@ -114,6 +115,21 @@ namespace TelegramBot.Support
                 cancellationToken: ct);
         }
 
+        public async Task HandleStatisticCommand(long chatId, CancellationToken ct)
+        {
+            if (await TryCancelState("/statistic", chatId, ct))
+                return;
+
+
+            var stat = await _httpClient.GetStringAsync($"/api/expense/statistic/{chatId}", ct);
+
+            var removeKeyboard = new ReplyKeyboardRemove();
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: stat,
+                replyMarkup: removeKeyboard,
+                cancellationToken: ct);
+        }
 
 
         public async Task HandleMyExpensesCommand(long chatId, CancellationToken ct)
@@ -144,32 +160,38 @@ namespace TelegramBot.Support
                 return;
             }
 
-
             switch (state.Step)
             {
                 case 1 when decimal.TryParse(text, out var amount):
-
-                    if(amount <= 0 || amount > 100)
+                    if (amount <= 0 || amount > 100)
                     {
                         await _botClient.SendMessage(
-                        chatId: chatId,
-                        text: "Я же сказал — не более ста😆",
-                        cancellationToken: ct);
+                            chatId: chatId,
+                            text: "Я же сказал — не более ста😆",
+                            cancellationToken: ct);
                     }
                     else
                     {
                         var getResponse = await _httpClient.GetStringAsync(
                             $"/api/expense/format/{chatId}/{amount}");
 
-                        await _botClient.SendMessage(
-                        chatId: chatId,
-                        text: getResponse,
-                        cancellationToken: ct);
+
+                        var messageParts = SplitMessage(getResponse, 4000);
+
+                        foreach (var part in messageParts)
+                        {
+                            await _botClient.SendMessage(
+                                chatId: chatId,
+                                text: part,
+                                cancellationToken: ct);
+
+
+                            await Task.Delay(300, ct);
+                        }
 
                         _myExp.Remove(chatId);
                     }
                     break;
-
 
                 default:
                     await _botClient.SendMessage(
@@ -178,6 +200,20 @@ namespace TelegramBot.Support
                         cancellationToken: ct);
                     break;
             }
+        }
+
+
+        private List<string> SplitMessage(string message, int maxLength)
+        {
+            var parts = new List<string>();
+
+            for (int i = 0; i < message.Length; i += maxLength)
+            {
+                int length = Math.Min(maxLength, message.Length - i);
+                parts.Add(message.Substring(i, length));
+            }
+
+            return parts;
         }
 
 
@@ -377,14 +413,31 @@ namespace TelegramBot.Support
             bool textIs = text == "/days" || text == "/create" || text == "/weekly"
             || text == "/monthly" || text == "/newcat" || text == "/mycat"
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
-            || text == "/start" || text == "/commands";
+            || text == "/start" || text == "/commands" || text == "/statistic";
             if (textIs)
             {
                 await ClearAllStates(chatId, ct);
             }
         }
 
+        private async Task<bool> TryCancelState(string text, long chatId, CancellationToken ct)
+        {
+            bool isCommand = text == "/days" || text == "/create" || text == "/weekly"
+            || text == "/monthly" || text == "/newcat" || text == "/mycat"
+            || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
+            || text == "/start" || text == "/commands" || text == "/statistic";
 
+            if (!isCommand)
+                return false;
+
+            if (_userStates.ContainsKey(chatId) || _myExp.ContainsKey(chatId))
+            {
+                await ClearAllStates(chatId, ct);
+                return true; 
+            }
+
+            return false;
+        }
         public async Task<bool> isActive(long chatId, CancellationToken ct)
         {
             if (_userStates.TryGetValue(chatId, out var state))

@@ -132,6 +132,10 @@ namespace TelegramBot.Services
                     await _ex.HandleMyExpensesCommand(chatId, ct);
                     break;
 
+                case "/statistic":
+                    await _ex.HandleStatisticCommand(chatId, ct);
+                    break;
+
                 default:
                     await _ex.HandleUserInput(chatId, text, ct);
                     break;
