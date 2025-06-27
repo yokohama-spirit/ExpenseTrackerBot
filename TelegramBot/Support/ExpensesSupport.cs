@@ -86,9 +86,12 @@ namespace TelegramBot.Support
                 await ClearAllStates(chatId, ct);
             }
             var weekly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkw/{chatId}", ct);
+
+            var removeKeyboard = new ReplyKeyboardRemove();
             await _botClient.SendMessage(
                 chatId: chatId,
                 text: $"Расходы за неделю: {weekly} ₽",
+                replyMarkup: removeKeyboard,
                 cancellationToken: ct);
         }
 
@@ -99,9 +102,12 @@ namespace TelegramBot.Support
                 await ClearAllStates(chatId, ct);
             }
             var monthly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkm/{chatId}", ct);
+
+            var removeKeyboard = new ReplyKeyboardRemove();
             await _botClient.SendMessage(
                 chatId: chatId,
                 text: $"Расходы за месяц: {monthly} ₽",
+                replyMarkup: removeKeyboard,
                 cancellationToken: ct);
         }
 
@@ -122,6 +128,9 @@ namespace TelegramBot.Support
                     break;
 
                 case 2:
+
+                    await StateRemover(text, chatId, ct);
+
                     var removeKeyboard = new ReplyKeyboardRemove();
                     state.Description = text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase)
                         ? "Не указано"
@@ -140,10 +149,6 @@ namespace TelegramBot.Support
                     break;
 
                 case 3:
-                    if (text.StartsWith("/"))
-                    {
-                        await ClearAllStates(chatId, ct);
-                    }
 
                     var removeCatKeyboard = new ReplyKeyboardRemove();
                     string category = text.Equals("Пропустить", StringComparison.OrdinalIgnoreCase)
@@ -267,7 +272,7 @@ namespace TelegramBot.Support
                     cancellationToken: ct);
             }
 
-            _userStates.Remove(chatId); 
+            _userStates.Remove(chatId);
         }
 
         public Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)

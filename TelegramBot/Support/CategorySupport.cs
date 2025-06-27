@@ -231,17 +231,16 @@ namespace TelegramBot.Support
 
             Console.WriteLine($"Состояние для {chatId} установлено: {nameof(CategoryCreationState)}");
 
+            var removeKeyboard = new ReplyKeyboardRemove();
             await _botClient.SendMessage(
                 chatId: chatId,
                 text: "Введите название категории:",
+                replyMarkup: removeKeyboard,
                 cancellationToken: ct);
         }
 
         public async Task HandleWeeklyInputCommand(long chatId, string text, CancellationToken ct)
         {
-            await StateRemover(text, chatId, ct);
-
-
             if (!_checkByCatStates.TryGetValue(chatId, out var state))
             {
                 Console.WriteLine($"Не найдено состояние для chatId {chatId}");
@@ -252,6 +251,8 @@ namespace TelegramBot.Support
             switch (state.Step)
             {
                 case 1:
+
+                    await StateRemover(text, chatId, ct);
 
                     var getResponse = await _httpClient.GetFromJsonAsync<bool>(
                     $"/api/category/ix/{text}/{chatId}");
@@ -297,9 +298,11 @@ namespace TelegramBot.Support
 
             Console.WriteLine($"Состояние для {chatId} установлено: {nameof(CategoryCreationState)}");
 
+            var removeKeyboard = new ReplyKeyboardRemove();
             await _botClient.SendMessage(
                 chatId: chatId,
                 text: "Введите название категории:",
+                replyMarkup: removeKeyboard,
                 cancellationToken: ct);
         }
 
@@ -361,9 +364,11 @@ namespace TelegramBot.Support
 
             Console.WriteLine($"Состояние для {chatId} установлено: {nameof(CategoryCreationState)}");
 
+            var removeKeyboard = new ReplyKeyboardRemove();
             await _botClient.SendMessage(
                 chatId: chatId,
                 text: "Введите кол-во дней, за которое хотите получить отсчет:",
+                replyMarkup: removeKeyboard,
                 cancellationToken: ct);
         }
 
