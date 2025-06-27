@@ -80,6 +80,12 @@ namespace TelegramBot.Services
                 return;
             }
 
+            if (await _ex.isActiveExpCheck(chatId))
+            {
+                await _ex.HandleMyExpensesInputCommand(chatId, text, ct);
+                return;
+            }
+
             switch (text)
             {
                 case "/start":
@@ -120,6 +126,10 @@ namespace TelegramBot.Services
 
                 case "/days":
                     await _cat.HandleDaysCommand(chatId, ct);
+                    break;
+
+                case "/myexp":
+                    await _ex.HandleMyExpensesCommand(chatId, ct);
                     break;
 
                 default:

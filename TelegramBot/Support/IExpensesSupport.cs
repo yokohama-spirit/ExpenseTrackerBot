@@ -14,6 +14,9 @@ namespace TelegramBot.Support
         Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct);
         Task HandleCommsCommand(long chatId, CancellationToken ct);
         Task<bool> isActive(long chatId, CancellationToken ct);
+        Task HandleMyExpensesCommand(long chatId, CancellationToken ct);
+        Task HandleMyExpensesInputCommand(long chatId, string text, CancellationToken ct);
+        Task<bool> isActiveExpCheck(long chatId);
         Task ClearUserState(long chatId, CancellationToken ct);
     }
 }

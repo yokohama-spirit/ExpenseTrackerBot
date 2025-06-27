@@ -421,7 +421,7 @@ namespace TelegramBot.Support
         {
             bool textIs = text == "/days" || text == "/create" || text == "/weekly"
             || text == "/monthly" || text == "/newcat" || text == "/mycat" 
-            || text == "/weeklyc" || text == "/monthlyc" 
+            || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
             || text == "/start" || text == "/commands";
             if (textIs)
             {

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Scaffolding.Metadata;
 using Microsoft.Extensions.Caching.Distributed;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
@@ -123,6 +124,36 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
                 cacheOptions);
 
             return totalAmount;
+        }
+
+        public async Task<string> FormatExpenses(long chatId, int count)
+        {
+            var expenses = await _conn.Expenses
+                .Where(e => e.ChatId == chatId)
+                .OrderByDescending(e => e.CreatedAt)
+                .Take(count)
+                .Include(e => e.Categories) 
+                .ToListAsync();
+
+            if (expenses == null || !expenses.Any())
+                return "Нет данных о расходах";
+
+            var sb = new StringBuilder();
+            var culture = new CultureInfo("ru-RU");
+
+            foreach (var expense in expenses)
+            {
+                sb.AppendLine($"Кол-во: {expense.Amount}₽");
+                sb.AppendLine($"Описание: {expense.Content ?? "Не указано"}");
+
+                var category = expense.Categories?.FirstOrDefault()?.Name ?? "Не указана";
+                sb.AppendLine($"Категория: {category}");
+
+                sb.AppendLine($"Добавлено: {expense.CreatedAt.ToString("HH:mm, dd MMMM yyyy", culture)}");
+                sb.AppendLine("--------------------------------------");
+            }
+
+            return sb.ToString();
         }
 
         public async Task CreateExpense(Expense ex)

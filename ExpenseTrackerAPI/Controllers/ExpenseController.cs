@@ -36,6 +36,15 @@ namespace ExpenseTrackerAPI.Controllers
             }
         }
 
+
+        [HttpGet("format/{chatId}/{count}")]
+        public async Task<string> CheckWeeklyExpenses(long chatId, int count)
+        {
+            var result = await _rep.FormatExpenses(chatId, count);
+            return result;
+        }
+
+
         [HttpGet("checkw/{chatId}")]
         public async Task<decimal> CheckWeeklyExpenses(long chatId)
         {

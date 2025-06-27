@@ -14,9 +14,10 @@ namespace TelegramBot.Support
         private readonly ITelegramBotClient _botClient;
         private readonly HttpClient _httpClient;
         private readonly Dictionary<long, ExpenseCreationState> _userStates;
+        private readonly Dictionary<long, MyExpensesCheck> _myExp;
         private readonly TelegramBotConfig _config;
         private readonly Lazy<ICategorySupport> _service;
-
+        
         public ExpensesSupport
             (TelegramBotConfig config,
             Lazy<ICategorySupport> service)
@@ -25,6 +26,7 @@ namespace TelegramBot.Support
             _botClient = new TelegramBotClient(_config.Token);
             _httpClient = new HttpClient { BaseAddress = new Uri(_config.ApiBaseUrl) };
             _userStates = new Dictionary<long, ExpenseCreationState>();
+            _myExp = new Dictionary<long, MyExpensesCheck>();
             _service = service;
         }
 
@@ -59,7 +61,8 @@ namespace TelegramBot.Support
                       "/mycat - получение своих категорий\n" +
                       "/weeklyc - получение расходов за неделю по определенной категории\n" +
                       "/monthlyc - получение расходов за месяц по определенной категории\n" +
-                      "/days - получение расходов за любое кол-во дней",
+                      "/days - получение расходов за любое кол-во дней\n" +
+                      "/myexp - получение последних расходов",
                 cancellationToken: ct);
         }
 
@@ -110,6 +113,74 @@ namespace TelegramBot.Support
                 replyMarkup: removeKeyboard,
                 cancellationToken: ct);
         }
+
+
+
+        public async Task HandleMyExpensesCommand(long chatId, CancellationToken ct)
+        {
+
+            _myExp[chatId] = new MyExpensesCheck
+            {
+                Step = 1
+            };
+
+            Console.WriteLine($"Состояние для {chatId} установлено: {nameof(MyExpensesCheck)}");
+
+            var removeKeyboard = new ReplyKeyboardRemove();
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Введите кол-во последних расходов, которое хотите получить (не более 100):",
+                replyMarkup: removeKeyboard,
+                cancellationToken: ct);
+        }
+
+        public async Task HandleMyExpensesInputCommand(long chatId, string text, CancellationToken ct)
+        {
+            await StateRemover(text, chatId, ct);
+
+            if (!_myExp.TryGetValue(chatId, out var state))
+            {
+                Console.WriteLine($"Не найдено состояние для chatId {chatId}");
+                return;
+            }
+
+
+            switch (state.Step)
+            {
+                case 1 when decimal.TryParse(text, out var amount):
+
+                    if(amount <= 0 || amount > 100)
+                    {
+                        await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "Я же сказал — не более ста😆",
+                        cancellationToken: ct);
+                    }
+                    else
+                    {
+                        var getResponse = await _httpClient.GetStringAsync(
+                            $"/api/expense/format/{chatId}/{amount}");
+
+                        await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: getResponse,
+                        cancellationToken: ct);
+
+                        _myExp.Remove(chatId);
+                    }
+                    break;
+
+
+                default:
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "Некорректный ввод, попробуйте снова",
+                        cancellationToken: ct);
+                    break;
+            }
+        }
+
+
 
 
         public async Task HandleUserInput(long chatId, string text, CancellationToken ct)
@@ -284,6 +355,7 @@ namespace TelegramBot.Support
         private async Task ClearAllStates(long chatId, CancellationToken ct)
         {
             _userStates.Remove(chatId);
+            _myExp.Remove(chatId);
             await _service.Value.ClearAllStatesNoUser(chatId, ct);
 
             await _botClient.SendMessage(
@@ -297,13 +369,15 @@ namespace TelegramBot.Support
         public async Task ClearUserState(long chatId, CancellationToken ct)
         {
             _userStates.Remove(chatId);
+            _myExp.Remove(chatId);
         }
 
         private async Task StateRemover(string text, long chatId, CancellationToken ct)
         {
             bool textIs = text == "/days" || text == "/create" || text == "/weekly"
             || text == "/monthly" || text == "/newcat" || text == "/mycat"
-            || text == "/monthlyc" || text == "/start" || text == "/commands";
+            || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
+            || text == "/start" || text == "/commands";
             if (textIs)
             {
                 await ClearAllStates(chatId, ct);
@@ -314,6 +388,13 @@ namespace TelegramBot.Support
         public async Task<bool> isActive(long chatId, CancellationToken ct)
         {
             if (_userStates.TryGetValue(chatId, out var state))
+                return true;
+            return false;
+        }
+
+        public async Task<bool> isActiveExpCheck(long chatId)
+        {
+            if (_myExp.TryGetValue(chatId, out var state))
                 return true;
             return false;
         }
