@@ -381,11 +381,18 @@ namespace TelegramBot.Support
             switch (state.Step)
             {
                 case 1 when decimal.TryParse(text, out var amount):
-                    if (amount <= 0 || amount > 100)
+                    if (amount > 100)
                     {
                         await _botClient.SendMessage(
                             chatId: chatId,
                             text: "Я же сказал — не более ста😆",
+                            cancellationToken: ct);
+                    }
+                    else if (amount <= 0)
+                    {
+                        await _botClient.SendMessage(
+                            chatId: chatId,
+                            text: "Маловато ты просишь😳",
                             cancellationToken: ct);
                     }
                     else
@@ -486,16 +493,17 @@ namespace TelegramBot.Support
 
             await _botClient.SendMessage(
                 chatId: chatId,
-                text: "❌ Команда отменена.\n" +
+                text: "❌ Прошлая команда отменена.\n" +
                 "Для использования новой команды пропишите ее еще раз.",
                 replyMarkup: new ReplyKeyboardRemove(),
                 cancellationToken: ct);
         }
 
-        public async Task ClearUserState(long chatId, CancellationToken ct)
+        public async Task ClearThisStates(long chatId, CancellationToken ct)
         {
             _userStates.Remove(chatId);
             _myExp.Remove(chatId);
+            _limit.Remove(chatId);
         }
 
         private async Task StateRemover(string text, long chatId, CancellationToken ct)

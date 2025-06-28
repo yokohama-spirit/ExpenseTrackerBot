@@ -441,7 +441,7 @@ namespace TelegramBot.Support
 
         public async Task ClearAllStates(long chatId, CancellationToken ct)
         {
-            await _ex.ClearUserState(chatId, ct);
+            await _ex.ClearThisStates(chatId, ct);
             _userStates.Remove(chatId);
             _userCatStates.Remove(chatId);
             _checkByCatStates.Remove(chatId);
@@ -450,7 +450,7 @@ namespace TelegramBot.Support
 
             await _botClient.SendMessage(
                 chatId: chatId,
-                text: "❌ Команда отменена.\n" +
+                text: "❌ Прошлая команда отменена.\n" +
                 "Для использования новой команды пропишите ее еще раз.",
                 replyMarkup: new ReplyKeyboardRemove(),
                 cancellationToken: ct);
