@@ -1,7 +1,9 @@
-﻿using ExpenseTrackerLibrary.Domain.Entities;
+﻿using ExpenseTrackerLibrary.Application.Services;
+using ExpenseTrackerLibrary.Domain.Entities;
 using ExpenseTrackerLibrary.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 namespace ExpenseTrackerAPI.Controllers
 {
@@ -10,10 +12,17 @@ namespace ExpenseTrackerAPI.Controllers
     public class ExpenseController : ControllerBase
     {
         private readonly IExpenseRepository _rep;
+        private readonly IExpenseLimitService _expLimit;
+        private readonly IMonthlyLimitRepository _limit;
 
-        public ExpenseController(IExpenseRepository rep)
+        public ExpenseController
+            (IExpenseRepository rep, 
+            IExpenseLimitService expLimit,
+            IMonthlyLimitRepository limit)
         {
             _rep = rep;
+            _expLimit = expLimit;
+            _limit = limit;
         }
 
 

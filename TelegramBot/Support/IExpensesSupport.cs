@@ -19,5 +19,8 @@ namespace TelegramBot.Support
         Task<bool> isActiveExpCheck(long chatId);
         Task HandleStatisticCommand(long chatId, CancellationToken ct);
         Task ClearUserState(long chatId, CancellationToken ct);
+        Task HandleSetLimitCommand(long chatId, CancellationToken ct);
+        Task HandleSetLimitInputCommand(long chatId, string amountText, CancellationToken ct);
+        Task<bool> isActiveLimit(long chatId);
     }
 }

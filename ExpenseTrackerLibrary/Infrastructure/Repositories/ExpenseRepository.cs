@@ -109,7 +109,7 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
             return sb.ToString();
         }
 
-        private async Task<decimal> GetCurrentMonthTotalAsync(long chatId)
+        public async Task<decimal> GetCurrentMonthTotalAsync(long chatId)
         {
             var now = DateTime.UtcNow;
             var firstDayOfMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);

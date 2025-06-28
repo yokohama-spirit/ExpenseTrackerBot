@@ -1,3 +1,4 @@
+using ExpenseTrackerLibrary.Application.Services;
 using ExpenseTrackerLibrary.Domain.Interfaces;
 using ExpenseTrackerLibrary.Infrastructure.Data;
 using ExpenseTrackerLibrary.Infrastructure.Repositories;
@@ -19,6 +20,8 @@ builder.Services.AddDbContext<DatabaseConnect>(options =>
 
 builder.Services.AddScoped<IExpenseRepository, ExpenseRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<IExpenseLimitService, ExpenseLimitService>();
+builder.Services.AddScoped<IMonthlyLimitRepository, MonthlyLimitRepository>();
 
 //Redis
 builder.Services.AddStackExchangeRedisCache(options =>

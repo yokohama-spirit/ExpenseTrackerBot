@@ -420,9 +420,10 @@ namespace TelegramBot.Support
         private async Task StateRemover(string text, long chatId, CancellationToken ct)
         {
             bool textIs = text == "/days" || text == "/create" || text == "/weekly"
-            || text == "/monthly" || text == "/newcat" || text == "/mycat" 
+            || text == "/monthly" || text == "/newcat" || text == "/mycat"
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
-            || text == "/start" || text == "/commands" || text == "/statistic";
+            || text == "/start" || text == "/commands" | text == "/setlimit"
+            || text == "/statistic";
             if (textIs)
             {
                 await ClearAllStates(chatId, ct);

@@ -86,6 +86,12 @@ namespace TelegramBot.Services
                 return;
             }
 
+            if (await _ex.isActiveLimit(chatId))
+            {
+                await _ex.HandleSetLimitInputCommand(chatId, text, ct);
+                return;
+            }
+
             switch (text)
             {
                 case "/start":
@@ -134,6 +140,10 @@ namespace TelegramBot.Services
 
                 case "/statistic":
                     await _ex.HandleStatisticCommand(chatId, ct);
+                    break;
+
+                case "/setlimit":
+                    await _ex.HandleSetLimitCommand(chatId, ct);
                     break;
 
                 default:

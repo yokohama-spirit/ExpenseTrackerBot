@@ -15,5 +15,6 @@ namespace ExpenseTrackerLibrary.Domain.Interfaces
         Task<string> FormatExpenses(long chatId, int count);
         Task<decimal> CheckCustomTimeDays(int days, long chatId);
         Task<string> GenerateMonthlyStats(long chatId);
+        Task<decimal> GetCurrentMonthTotalAsync(long chatId);
     }
 }

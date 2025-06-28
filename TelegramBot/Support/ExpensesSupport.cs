@@ -1,4 +1,5 @@
-﻿using ExpenseTrackerLibrary.Domain.Entities;
+﻿using ExpenseTrackerLibrary.Application.Services;
+using ExpenseTrackerLibrary.Domain.Entities;
 using System.Net.Http;
 using System.Text.Json;
 using Telegram.Bot;
@@ -6,6 +7,7 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
 using TelegramBot.Services;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace TelegramBot.Support
 {
@@ -15,6 +17,7 @@ namespace TelegramBot.Support
         private readonly HttpClient _httpClient;
         private readonly Dictionary<long, ExpenseCreationState> _userStates;
         private readonly Dictionary<long, MyExpensesCheck> _myExp;
+        private readonly Dictionary<long, LimitSet> _limit;
         private readonly TelegramBotConfig _config;
         private readonly Lazy<ICategorySupport> _service;
         
@@ -26,6 +29,7 @@ namespace TelegramBot.Support
             _botClient = new TelegramBotClient(_config.Token);
             _httpClient = new HttpClient { BaseAddress = new Uri(_config.ApiBaseUrl) };
             _userStates = new Dictionary<long, ExpenseCreationState>();
+            _limit = new Dictionary<long, LimitSet>();
             _myExp = new Dictionary<long, MyExpensesCheck>();
             _service = service;
         }
@@ -63,7 +67,8 @@ namespace TelegramBot.Support
                       "/weeklyc - получение расходов за неделю по определенной категории\n" +
                       "/monthlyc - получение расходов за месяц по определенной категории\n" +
                       "/days - получение расходов за любое кол-во дней\n" +
-                      "/myexp - получение последних расходов",
+                      "/myexp - получение последних расходов\n" +
+                      "/setlimit - назначение собственного лимита на месячные расходы",
                 cancellationToken: ct);
         }
 
@@ -82,143 +87,6 @@ namespace TelegramBot.Support
                 text: "Введите сумму расхода:",
                 cancellationToken: ct);
         }
-
-        public async Task HandleCheckWeeklyCommand(long chatId, CancellationToken ct)
-        {
-            if (await TryCancelState("/weekly", chatId, ct))
-                return;
-
-
-            var weekly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkw/{chatId}", ct);
-
-            var removeKeyboard = new ReplyKeyboardRemove();
-            await _botClient.SendMessage(
-                chatId: chatId,
-                text: $"Расходы за неделю: {weekly} ₽",
-                replyMarkup: removeKeyboard,
-                cancellationToken: ct);
-        }
-
-        public async Task HandleCheckMonthlyCommand(long chatId, CancellationToken ct)
-        {
-            if (await TryCancelState("/monthly", chatId, ct))
-                return;
-
-
-            var monthly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkm/{chatId}", ct);
-
-            var removeKeyboard = new ReplyKeyboardRemove();
-            await _botClient.SendMessage(
-                chatId: chatId,
-                text: $"Расходы за месяц: {monthly} ₽",
-                replyMarkup: removeKeyboard,
-                cancellationToken: ct);
-        }
-
-        public async Task HandleStatisticCommand(long chatId, CancellationToken ct)
-        {
-            if (await TryCancelState("/statistic", chatId, ct))
-                return;
-
-
-            var stat = await _httpClient.GetStringAsync($"/api/expense/statistic/{chatId}", ct);
-
-            var removeKeyboard = new ReplyKeyboardRemove();
-            await _botClient.SendMessage(
-                chatId: chatId,
-                text: stat,
-                replyMarkup: removeKeyboard,
-                cancellationToken: ct);
-        }
-
-
-        public async Task HandleMyExpensesCommand(long chatId, CancellationToken ct)
-        {
-
-            _myExp[chatId] = new MyExpensesCheck
-            {
-                Step = 1
-            };
-
-            Console.WriteLine($"Состояние для {chatId} установлено: {nameof(MyExpensesCheck)}");
-
-            var removeKeyboard = new ReplyKeyboardRemove();
-            await _botClient.SendMessage(
-                chatId: chatId,
-                text: "Введите кол-во последних расходов, которое хотите получить (не более 100):",
-                replyMarkup: removeKeyboard,
-                cancellationToken: ct);
-        }
-
-        public async Task HandleMyExpensesInputCommand(long chatId, string text, CancellationToken ct)
-        {
-            await StateRemover(text, chatId, ct);
-
-            if (!_myExp.TryGetValue(chatId, out var state))
-            {
-                Console.WriteLine($"Не найдено состояние для chatId {chatId}");
-                return;
-            }
-
-            switch (state.Step)
-            {
-                case 1 when decimal.TryParse(text, out var amount):
-                    if (amount <= 0 || amount > 100)
-                    {
-                        await _botClient.SendMessage(
-                            chatId: chatId,
-                            text: "Я же сказал — не более ста😆",
-                            cancellationToken: ct);
-                    }
-                    else
-                    {
-                        var getResponse = await _httpClient.GetStringAsync(
-                            $"/api/expense/format/{chatId}/{amount}");
-
-
-                        var messageParts = SplitMessage(getResponse, 4000);
-
-                        foreach (var part in messageParts)
-                        {
-                            await _botClient.SendMessage(
-                                chatId: chatId,
-                                text: part,
-                                cancellationToken: ct);
-
-
-                            await Task.Delay(300, ct);
-                        }
-
-                        _myExp.Remove(chatId);
-                    }
-                    break;
-
-                default:
-                    await _botClient.SendMessage(
-                        chatId: chatId,
-                        text: "Некорректный ввод, попробуйте снова",
-                        cancellationToken: ct);
-                    break;
-            }
-        }
-
-
-        private List<string> SplitMessage(string message, int maxLength)
-        {
-            var parts = new List<string>();
-
-            for (int i = 0; i < message.Length; i += maxLength)
-            {
-                int length = Math.Min(maxLength, message.Length - i);
-                parts.Add(message.Substring(i, length));
-            }
-
-            return parts;
-        }
-
-
-
-
         public async Task HandleUserInput(long chatId, string text, CancellationToken ct)
         {
             await StateRemover(text, chatId, ct);
@@ -306,6 +174,267 @@ namespace TelegramBot.Support
             }
         }
 
+        public async Task ProcessExpenseCreation(long chatId, string description, string categoryName,
+            ExpenseCreationState state, CancellationToken ct)
+        {
+            var expense = new Expense
+            {
+                Amount = state.Amount,
+                Content = description,
+                ChatId = chatId
+            };
+
+            if (!categoryName.Equals("Не указано"))
+            {
+                expense.Categories.Add(new Category
+                {
+                    ChatId = chatId,
+                    Name = categoryName
+                });
+            }
+
+            var response = await _httpClient.PostAsJsonAsync("/api/expense", expense, ct);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await _botClient.SendMessage(
+                    chatId: chatId,
+                    text: "✅ Расход добавлен!",
+                    cancellationToken: ct);
+
+
+                var limitCheck = await _httpClient.GetFromJsonAsync<LimitCheckResult>(
+                    $"/api/limits/check?chatId={chatId}&amount={state.Amount}");
+
+                if (limitCheck.IsLimitExceeded)
+                {
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "⚠ Лимит превзойден :(",
+                        cancellationToken: ct);
+                }
+                else if (limitCheck.IsWarningNeeded)
+                {
+                    var messages = new[]
+                    {
+                $"До лимита осталось совсем чуть-чуть! Ваш лимит - {limitCheck.CurrentLimit}₽, а за текущий месяц уже потрачено {limitCheck.CurrentSpent}₽!😨",
+                $"Осторожно! Вы превзошли 75% лимита ({limitCheck.CurrentSpent}₽ из {limitCheck.CurrentLimit}₽)🙀",
+                $"Лимит близок! Осталось всего {limitCheck.CurrentLimit - limitCheck.CurrentSpent}₽ до предела😱",
+                $"⚡До лимита рукой подать! Стремление - наше все, но в этом случае стоило бы притормозить...🙅"
+            };
+
+                    var random = new Random();
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: messages[random.Next(messages.Length)],
+                        cancellationToken: ct);
+                }
+            }
+            else
+            {
+                await _botClient.SendMessage(
+                    chatId: chatId,
+                    text: "❌ Ошибка при добавлении",
+                    cancellationToken: ct);
+            }
+
+            _userStates.Remove(chatId);
+        }
+
+        public async Task HandleCheckWeeklyCommand(long chatId, CancellationToken ct)
+        {
+            if (await TryCancelState("/weekly", chatId, ct))
+                return;
+
+
+            var weekly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkw/{chatId}", ct);
+
+            var removeKeyboard = new ReplyKeyboardRemove();
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: $"Расходы за последнюю неделю: {weekly} ₽",
+                replyMarkup: removeKeyboard,
+                cancellationToken: ct);
+        }
+
+        public async Task HandleCheckMonthlyCommand(long chatId, CancellationToken ct)
+        {
+            if (await TryCancelState("/monthly", chatId, ct))
+                return;
+
+
+            var monthly = await _httpClient.GetFromJsonAsync<decimal>($"/api/expense/checkm/{chatId}", ct);
+
+            var removeKeyboard = new ReplyKeyboardRemove();
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: $"Расходы за последний месяц: {monthly} ₽",
+                replyMarkup: removeKeyboard,
+                cancellationToken: ct);
+        }
+
+        public async Task HandleStatisticCommand(long chatId, CancellationToken ct)
+        {
+            if (await TryCancelState("/statistic", chatId, ct))
+                return;
+
+
+            var stat = await _httpClient.GetStringAsync($"/api/expense/statistic/{chatId}", ct);
+
+            var removeKeyboard = new ReplyKeyboardRemove();
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: stat,
+                replyMarkup: removeKeyboard,
+                cancellationToken: ct);
+        }
+
+        public async Task HandleSetLimitCommand(long chatId, CancellationToken ct)
+        {
+
+            _limit[chatId] = new LimitSet
+            {
+                Step = 1
+            };
+
+            Console.WriteLine($"Состояние для {chatId} установлено: {nameof(MyExpensesCheck)}");
+
+            var removeKeyboard = new ReplyKeyboardRemove();
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Введите лимит для трат, который хотите установить:",
+                replyMarkup: removeKeyboard,
+                cancellationToken: ct);
+        }
+
+        public async Task HandleSetLimitInputCommand(long chatId, string text, CancellationToken ct)
+        {
+            await StateRemover(text, chatId, ct);
+
+            if (!_limit.TryGetValue(chatId, out var state))
+            {
+                Console.WriteLine($"Не найдено состояние для chatId {chatId}");
+                return;
+            }
+
+            switch (state.Step)
+            {
+                case 1 when decimal.TryParse(text, out var amount):
+
+                    var response = await _httpClient.PostAsync(
+                        $"/api/limits/set?chatId={chatId}&amount={amount}", null, ct);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        await _botClient.SendMessage(
+                            chatId: chatId,
+                            text: $"✅ Лимит установлен: {amount}₽",
+                            cancellationToken: ct);
+                        _limit.Remove(chatId);
+                    }
+                    else
+                    {
+                        await _botClient.SendMessage(
+                            chatId: chatId,
+                            text: "Некорректная сумма лимита",
+                            cancellationToken: ct);
+                    }
+                    break;
+
+                default:
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "Некорректный ввод, попробуйте снова",
+                        cancellationToken: ct);
+                    break;
+            }
+        }
+
+        public async Task HandleMyExpensesCommand(long chatId, CancellationToken ct)
+        {
+
+            _myExp[chatId] = new MyExpensesCheck
+            {
+                Step = 1
+            };
+
+            Console.WriteLine($"Состояние для {chatId} установлено: {nameof(MyExpensesCheck)}");
+
+            var removeKeyboard = new ReplyKeyboardRemove();
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: "Введите кол-во последних расходов, которое хотите получить (не более 100):",
+                replyMarkup: removeKeyboard,
+                cancellationToken: ct);
+        }
+
+        public async Task HandleMyExpensesInputCommand(long chatId, string text, CancellationToken ct)
+        {
+            await StateRemover(text, chatId, ct);
+
+            if (!_myExp.TryGetValue(chatId, out var state))
+            {
+                Console.WriteLine($"Не найдено состояние для chatId {chatId}");
+                return;
+            }
+
+            switch (state.Step)
+            {
+                case 1 when decimal.TryParse(text, out var amount):
+                    if (amount <= 0 || amount > 100)
+                    {
+                        await _botClient.SendMessage(
+                            chatId: chatId,
+                            text: "Я же сказал — не более ста😆",
+                            cancellationToken: ct);
+                    }
+                    else
+                    {
+                        var getResponse = await _httpClient.GetStringAsync(
+                            $"/api/expense/format/{chatId}/{amount}");
+
+
+                        var messageParts = SplitMessage(getResponse, 4000);
+
+                        foreach (var part in messageParts)
+                        {
+                            await _botClient.SendMessage(
+                                chatId: chatId,
+                                text: part,
+                                cancellationToken: ct);
+
+
+                            await Task.Delay(300, ct);
+                        }
+
+                        _myExp.Remove(chatId);
+                    }
+                    break;
+
+                default:
+                    await _botClient.SendMessage(
+                        chatId: chatId,
+                        text: "Некорректный ввод, попробуйте снова",
+                        cancellationToken: ct);
+                    break;
+            }
+        }
+
+
+        private List<string> SplitMessage(string message, int maxLength)
+        {
+            var parts = new List<string>();
+
+            for (int i = 0; i < message.Length; i += maxLength)
+            {
+                int length = Math.Min(maxLength, message.Length - i);
+                parts.Add(message.Substring(i, length));
+            }
+
+            return parts;
+        }
+
+
         private async Task AskForDescription(long chatId, CancellationToken ct)
         {
             var replyKeyboard = new ReplyKeyboardMarkup(new[]
@@ -342,46 +471,6 @@ namespace TelegramBot.Support
                 cancellationToken: ct);
         }
 
-        public async Task ProcessExpenseCreation(long chatId, string description, string categoryName, ExpenseCreationState state, CancellationToken ct)
-        {
-            var expense = new Expense
-            {
-                Amount = state.Amount,
-                Content = description,
-                ChatId = chatId
-            };
-
-
-
-            if (!categoryName.Equals("Не указано"))
-            {
-                expense.Categories.Add(new Category
-                {
-                    ChatId = chatId,
-                    Name = categoryName
-                });
-            }
-
-            var response = await _httpClient.PostAsJsonAsync("/api/expense", expense, ct);
-
-            if (response.IsSuccessStatusCode)
-            {
-                await _botClient.SendMessage(
-                    chatId: chatId,
-                    text: "✅ Расход добавлен!",
-                    cancellationToken: ct);
-            }
-            else
-            {
-                await _botClient.SendMessage(
-                    chatId: chatId,
-                    text: "❌ Ошибка при добавлении",
-                    cancellationToken: ct);
-            }
-
-            _userStates.Remove(chatId);
-        }
-
         public Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)
         {
             Console.WriteLine($"Ошибка: {ex.Message}");
@@ -392,6 +481,7 @@ namespace TelegramBot.Support
         {
             _userStates.Remove(chatId);
             _myExp.Remove(chatId);
+            _limit.Remove(chatId);
             await _service.Value.ClearAllStatesNoUser(chatId, ct);
 
             await _botClient.SendMessage(
@@ -413,7 +503,8 @@ namespace TelegramBot.Support
             bool textIs = text == "/days" || text == "/create" || text == "/weekly"
             || text == "/monthly" || text == "/newcat" || text == "/mycat"
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
-            || text == "/start" || text == "/commands" || text == "/statistic";
+            || text == "/start" || text == "/commands" | text == "/setlimit"
+            || text == "/statistic";
             if (textIs)
             {
                 await ClearAllStates(chatId, ct);
@@ -425,7 +516,8 @@ namespace TelegramBot.Support
             bool isCommand = text == "/days" || text == "/create" || text == "/weekly"
             || text == "/monthly" || text == "/newcat" || text == "/mycat"
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
-            || text == "/start" || text == "/commands" || text == "/statistic";
+            || text == "/start" || text == "/commands" | text == "/setlimit"
+            || text == "/statistic";
 
             if (!isCommand)
                 return false;
@@ -448,6 +540,13 @@ namespace TelegramBot.Support
         public async Task<bool> isActiveExpCheck(long chatId)
         {
             if (_myExp.TryGetValue(chatId, out var state))
+                return true;
+            return false;
+        }
+
+        public async Task<bool> isActiveLimit(long chatId)
+        {
+            if (_limit.TryGetValue(chatId, out var state))
                 return true;
             return false;
         }
