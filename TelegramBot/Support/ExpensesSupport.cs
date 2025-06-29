@@ -66,6 +66,7 @@ namespace TelegramBot.Support
                       "/statistic - получение статистики\n" +
                       "/weekly - расходы за неделю\n" +
                       "/monthly - расходы за месяц\n" +
+                      "/plot - график со сравнением трат за последнюю неделю\n" +
                       "/newcat - создание новой категории расходов\n" +
                       "/mycat - получение своих категорий\n" +
                       "/weeklyc - получение расходов за неделю по определенной категории\n" +
@@ -77,6 +78,42 @@ namespace TelegramBot.Support
                       "/tips - получение совета по экономии денег",
                 cancellationToken: ct);
         }
+
+        //---------------------------------PLOT-----------------------------------
+
+        public async Task HandleWeeklyExpensesPlot(long chatId, CancellationToken ct)
+        {
+            if (await TryCancelState("/plot", chatId, ct))
+                return;
+
+            var removeKeyboard = new ReplyKeyboardRemove();
+            await _botClient.SendMessage(
+            chatId: chatId,
+            text: "⏳",
+            replyMarkup: removeKeyboard,
+            cancellationToken: ct);
+
+            try
+            {
+                var response = await _httpClient.GetAsync($"/api/plot/weekly-plot?chatId={chatId}");
+                response.EnsureSuccessStatusCode();
+
+                var plotBytes = await response.Content.ReadAsByteArrayAsync();
+                using var stream = new MemoryStream(plotBytes);
+
+                await _botClient.SendPhoto(
+                    chatId: chatId,
+                    photo: new InputFileStream(stream, "weekly_expenses.png"),
+                    caption: "📊 Ваши недельные расходы:"
+                );
+            }
+            catch (Exception ex)
+            {
+                await _botClient.SendMessage(chatId, "❌ Failed to generate plot.");
+                Console.WriteLine(ex);
+            }
+        }
+
 
 
         //---------------------------------CREATE EXPENSE-----------------------------------
@@ -594,7 +631,8 @@ namespace TelegramBot.Support
             || text == "/monthly" || text == "/newcat" || text == "/mycat"
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
             || text == "/start" || text == "/commands" | text == "/setlimit"
-            || text == "/statistic" || text == "/tips" || text == "/clear";
+            || text == "/statistic" || text == "/tips" || text == "/clear"
+            || text == "/plot";
             if (textIs)
             {
                 await ClearAllStates(chatId, ct);
@@ -607,7 +645,8 @@ namespace TelegramBot.Support
             || text == "/monthly" || text == "/newcat" || text == "/mycat"
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
             || text == "/start" || text == "/commands" | text == "/setlimit"
-            || text == "/statistic" || text == "/tips" || text == "/clear";
+            || text == "/statistic" || text == "/tips" || text == "/clear"
+            || text == "/plot";
 
             if (!isCommand)
                 return false;

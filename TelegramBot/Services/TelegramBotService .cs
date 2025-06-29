@@ -154,6 +154,10 @@ namespace TelegramBot.Services
                     await _ex.HandleClearLimitCommand(chatId, ct);
                     break;
 
+                case "/plot":
+                    await _ex.HandleWeeklyExpensesPlot(chatId, ct);
+                    break;
+
                 default:
                     await _ex.HandleUserInput(chatId, text, ct);
                     break;

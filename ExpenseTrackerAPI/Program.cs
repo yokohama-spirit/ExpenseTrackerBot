@@ -22,6 +22,8 @@ builder.Services.AddScoped<IExpenseRepository, ExpenseRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IExpenseLimitService, ExpenseLimitService>();
 builder.Services.AddScoped<IMonthlyLimitRepository, MonthlyLimitRepository>();
+builder.Services.AddScoped<IExpServiceForPlot, ExpServiceForPlot>();
+builder.Services.AddScoped<IPlotService, PlotService>();
 
 //Redis
 builder.Services.AddStackExchangeRedisCache(options =>

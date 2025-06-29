@@ -22,5 +22,6 @@ namespace TelegramBot.Interfaces
         Task<bool> isActiveLimit(long chatId);
         Task HandleGetTipsCommand(long chatId, CancellationToken ct);
         Task HandleClearLimitCommand(long chatId, CancellationToken ct);
+        Task HandleWeeklyExpensesPlot(long chatId, CancellationToken ct);
     }
 }
