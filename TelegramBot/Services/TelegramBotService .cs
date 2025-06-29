@@ -6,7 +6,7 @@ using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
-using TelegramBot.Support;
+using TelegramBot.Interfaces;
 using static System.Net.Mime.MediaTypeNames;
 
 namespace TelegramBot.Services
@@ -144,6 +144,14 @@ namespace TelegramBot.Services
 
                 case "/setlimit":
                     await _ex.HandleSetLimitCommand(chatId, ct);
+                    break;
+
+                case "/tips":
+                    await _ex.HandleGetTipsCommand(chatId, ct);
+                    break;
+
+                case "/clear":
+                    await _ex.HandleClearLimitCommand(chatId, ct);
                     break;
 
                 default:

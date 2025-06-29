@@ -6,6 +6,7 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
+using TelegramBot.Interfaces;
 using TelegramBot.Services;
 using static System.Net.Mime.MediaTypeNames;
 
@@ -14,6 +15,7 @@ namespace TelegramBot.Support
     public class ExpensesSupport : IExpensesSupport
     {
         private readonly ITelegramBotClient _botClient;
+        private readonly IAdviceService _tipservice;
         private readonly HttpClient _httpClient;
         private readonly Dictionary<long, ExpenseCreationState> _userStates;
         private readonly Dictionary<long, MyExpensesCheck> _myExp;
@@ -23,7 +25,8 @@ namespace TelegramBot.Support
         
         public ExpensesSupport
             (TelegramBotConfig config,
-            Lazy<ICategorySupport> service)
+            Lazy<ICategorySupport> service,
+            IAdviceService tipservice)
         {
             _config = config;
             _botClient = new TelegramBotClient(_config.Token);
@@ -32,6 +35,7 @@ namespace TelegramBot.Support
             _limit = new Dictionary<long, LimitSet>();
             _myExp = new Dictionary<long, MyExpensesCheck>();
             _service = service;
+            _tipservice = tipservice;
         }
 
         public async Task HandleStartCommand(long chatId, CancellationToken ct)
@@ -68,9 +72,16 @@ namespace TelegramBot.Support
                       "/monthlyc - получение расходов за месяц по определенной категории\n" +
                       "/days - получение расходов за любое кол-во дней\n" +
                       "/myexp - получение последних расходов\n" +
-                      "/setlimit - назначение собственного лимита на месячные расходы",
+                      "/setlimit - назначение собственного лимита на месячные расходы\n" +
+                      "/clear - удаление лимита\n" +
+                      "/tips - получение совета по экономии денег",
                 cancellationToken: ct);
         }
+
+
+        //---------------------------------CREATE EXPENSE-----------------------------------
+
+
 
         public async Task HandleCreateCommand(long chatId, CancellationToken ct)
         {
@@ -221,7 +232,7 @@ namespace TelegramBot.Support
                 $"Осторожно! Вы превзошли 75% лимита ({limitCheck.CurrentSpent}₽ из {limitCheck.CurrentLimit}₽)🙀",
                 $"Лимит близок! Осталось всего {limitCheck.CurrentLimit - limitCheck.CurrentSpent}₽ до предела😱",
                 $"⚡До лимита рукой подать! Стремление - наше все, но в этом случае стоило бы притормозить...🙅"
-            };
+                    };
 
                     var random = new Random();
                     await _botClient.SendMessage(
@@ -241,6 +252,12 @@ namespace TelegramBot.Support
             _userStates.Remove(chatId);
         }
 
+
+
+
+        //---------------------------------CHECK WEEKLY-----------------------------------
+
+
         public async Task HandleCheckWeeklyCommand(long chatId, CancellationToken ct)
         {
             if (await TryCancelState("/weekly", chatId, ct))
@@ -256,6 +273,9 @@ namespace TelegramBot.Support
                 replyMarkup: removeKeyboard,
                 cancellationToken: ct);
         }
+
+
+        //---------------------------------CHECK MONTHLY-----------------------------------
 
         public async Task HandleCheckMonthlyCommand(long chatId, CancellationToken ct)
         {
@@ -273,6 +293,9 @@ namespace TelegramBot.Support
                 cancellationToken: ct);
         }
 
+
+        //---------------------------------CHECK STATISTIC-----------------------------------
+
         public async Task HandleStatisticCommand(long chatId, CancellationToken ct)
         {
             if (await TryCancelState("/statistic", chatId, ct))
@@ -288,6 +311,31 @@ namespace TelegramBot.Support
                 replyMarkup: removeKeyboard,
                 cancellationToken: ct);
         }
+
+
+
+        //---------------------------------GET TIPS-----------------------------------
+
+        public async Task HandleGetTipsCommand(long chatId, CancellationToken ct)
+        {
+            if (await TryCancelState("/tips", chatId, ct))
+                return;
+
+
+            var tips = await _tipservice.GetFullTips();
+
+            var removeKeyboard = new ReplyKeyboardRemove();
+
+            var random = new Random();
+            await _botClient.SendMessage(
+                chatId: chatId,
+                text: tips[random.Next(tips.Length)],
+                replyMarkup: removeKeyboard,
+                cancellationToken: ct);
+        }
+
+
+        //---------------------------------LIMITS (SET, CLEAR)-----------------------------------
 
         public async Task HandleSetLimitCommand(long chatId, CancellationToken ct)
         {
@@ -349,6 +397,38 @@ namespace TelegramBot.Support
                     break;
             }
         }
+
+        public async Task HandleClearLimitCommand(long chatId, CancellationToken ct)
+        {
+            if (await TryCancelState("/clear", chatId, ct))
+                return;
+
+
+            var response = await _httpClient.GetStringAsync(
+                $"/api/limits/clear?chatId={chatId}", ct);
+
+            if (response == "Y")
+            {
+                var removeKeyboard = new ReplyKeyboardRemove();
+                await _botClient.SendMessage(
+                    chatId: chatId,
+                    text: "Лимит успешно сброшен!",
+                    replyMarkup: removeKeyboard,
+                    cancellationToken: ct);
+            }
+            else
+            {
+                var removeKeyboard = new ReplyKeyboardRemove();
+                await _botClient.SendMessage(
+                    chatId: chatId,
+                    text: "У вас не установлен лимит.",
+                    replyMarkup: removeKeyboard,
+                    cancellationToken: ct);
+            }
+        }
+
+
+        //---------------------------------GET MY EXPENSES-----------------------------------
 
         public async Task HandleMyExpensesCommand(long chatId, CancellationToken ct)
         {
@@ -427,7 +507,6 @@ namespace TelegramBot.Support
             }
         }
 
-
         private List<string> SplitMessage(string message, int maxLength)
         {
             var parts = new List<string>();
@@ -440,6 +519,10 @@ namespace TelegramBot.Support
 
             return parts;
         }
+
+
+        //---------------------------------ASKS-----------------------------------
+
 
 
         private async Task AskForDescription(long chatId, CancellationToken ct)
@@ -478,11 +561,10 @@ namespace TelegramBot.Support
                 cancellationToken: ct);
         }
 
-        public Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct)
-        {
-            Console.WriteLine($"Ошибка: {ex.Message}");
-            return Task.CompletedTask;
-        }
+
+        //---------------------------------METHODS FOR STATES-----------------------------------
+
+
 
         private async Task ClearAllStates(long chatId, CancellationToken ct)
         {
@@ -512,7 +594,7 @@ namespace TelegramBot.Support
             || text == "/monthly" || text == "/newcat" || text == "/mycat"
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
             || text == "/start" || text == "/commands" | text == "/setlimit"
-            || text == "/statistic";
+            || text == "/statistic" || text == "/tips" || text == "/clear";
             if (textIs)
             {
                 await ClearAllStates(chatId, ct);
@@ -525,7 +607,7 @@ namespace TelegramBot.Support
             || text == "/monthly" || text == "/newcat" || text == "/mycat"
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
             || text == "/start" || text == "/commands" | text == "/setlimit"
-            || text == "/statistic";
+            || text == "/statistic" || text == "/tips" || text == "/clear";
 
             if (!isCommand)
                 return false;
@@ -538,6 +620,10 @@ namespace TelegramBot.Support
 
             return false;
         }
+
+
+        //---------------------------------CHECK STATES-----------------------------------
+
         public async Task<bool> isActive(long chatId, CancellationToken ct)
         {
             if (_userStates.TryGetValue(chatId, out var state))

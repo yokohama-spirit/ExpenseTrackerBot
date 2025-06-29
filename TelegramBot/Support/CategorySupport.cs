@@ -2,6 +2,7 @@
 using Telegram.Bot;
 using Telegram.Bot.Types.ReplyMarkups;
 using TelegramBot.Config;
+using TelegramBot.Interfaces;
 
 namespace TelegramBot.Support
 {
@@ -32,6 +33,10 @@ namespace TelegramBot.Support
             _daysStates = new Dictionary<long, CustomDaysCheck>();
             _ex = ex;
         }
+
+
+        //---------------------------------CHECK STATES-----------------------------------
+
 
         public async Task<bool> isActiveUserCatStates(long chatId)
         {
@@ -70,6 +75,10 @@ namespace TelegramBot.Support
             }
             return false;
         }
+
+
+        //---------------------------------CREATE CATEGORY-----------------------------------
+
 
         public async Task HandleCreateCommand(long chatId, CancellationToken ct)
         {
@@ -121,6 +130,7 @@ namespace TelegramBot.Support
 
         private async Task HandleCategoryInput(long chatId, string text, CancellationToken ct)
         {
+
             var getResponse = await _httpClient.GetFromJsonAsync<bool>(
                     $"/api/category/ix/{text}/{chatId}");
 
@@ -166,19 +176,11 @@ namespace TelegramBot.Support
         }
 
 
+        //---------------------------------GET MY CATEGORIES-----------------------------------
+
         public async Task HandleMyCategoriesCommand(long chatId, CancellationToken ct)
         {
-            bool isActive = _userStates.TryGetValue(chatId, out var state)
-    || _userCatStates.TryGetValue(chatId, out var catState)
-    || _checkByCatStates.TryGetValue(chatId, out var checkState)
-    || _checkByCatStatesM.TryGetValue(chatId, out var checkStateM)
-    || _daysStates.TryGetValue(chatId, out var daysStates)
-    || await _ex.isActive(chatId, ct);
 
-            if (isActive)
-            {
-                await ClearAllStates(chatId, ct);
-            }
             try
             {
                 var response = await _httpClient.GetAsync($"/api/category/mycat/{chatId}", ct);
@@ -219,7 +221,7 @@ namespace TelegramBot.Support
             }
         }
 
-
+        //---------------------------------CHECK WEEKLY BY CAT-----------------------------------
 
         public async Task HandleWeeklyCommand(long chatId, CancellationToken ct)
         {
@@ -241,6 +243,8 @@ namespace TelegramBot.Support
 
         public async Task HandleWeeklyInputCommand(long chatId, string text, CancellationToken ct)
         {
+            await StateRemover(text, chatId, ct);
+
             if (!_checkByCatStates.TryGetValue(chatId, out var state))
             {
                 Console.WriteLine($"Не найдено состояние для chatId {chatId}");
@@ -251,9 +255,6 @@ namespace TelegramBot.Support
             switch (state.Step)
             {
                 case 1:
-
-                    await StateRemover(text, chatId, ct);
-
                     var getResponse = await _httpClient.GetFromJsonAsync<bool>(
                     $"/api/category/ix/{text}/{chatId}");
 
@@ -287,7 +288,7 @@ namespace TelegramBot.Support
             }
         }
 
-
+        //---------------------------------CHECK MONTHLY BY CAT-----------------------------------
         public async Task HandleMonthlyCommand(long chatId, CancellationToken ct)
         {
 
@@ -354,6 +355,8 @@ namespace TelegramBot.Support
             }
         }
 
+        //---------------------------------CHECK DAYS-----------------------------------
+
         public async Task HandleDaysCommand(long chatId, CancellationToken ct)
         {
 
@@ -408,6 +411,9 @@ namespace TelegramBot.Support
         }
 
 
+        //---------------------------------METHODS FOR STATES-----------------------------------
+
+
         public async Task ClearAllStatesNoUser(long chatId, CancellationToken ct)
         {
             _userStates.Remove(chatId);
@@ -423,7 +429,7 @@ namespace TelegramBot.Support
             || text == "/monthly" || text == "/newcat" || text == "/mycat"
             || text == "/weeklyc" || text == "/monthlyc" || text == "/myexp"
             || text == "/start" || text == "/commands" | text == "/setlimit"
-            || text == "/statistic";
+            || text == "/statistic" || text == "/tips" || text == "/clear";
             if (textIs)
             {
                 await ClearAllStates(chatId, ct);

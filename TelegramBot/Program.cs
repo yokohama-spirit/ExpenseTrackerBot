@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using TelegramBot.Config;
+using TelegramBot.Interfaces;
 using TelegramBot.Services;
 using TelegramBot.Support;
 
@@ -16,10 +17,12 @@ var botConfig = new TelegramBotConfig
 builder.Services.AddSingleton(botConfig);
 builder.Services.AddSingleton<ITelegramBotService, TelegramBotService>();
 builder.Services.AddSingleton<ICategorySupport, CategorySupport>();
+builder.Services.AddSingleton<IAdviceService, AdviceService>();
 builder.Services.AddSingleton<IExpensesSupport>(provider =>
     new ExpensesSupport(
         botConfig,
-        new Lazy<ICategorySupport>(provider.GetRequiredService<ICategorySupport>)
+        new Lazy<ICategorySupport>(provider.GetRequiredService<ICategorySupport>),
+        provider.GetRequiredService<IAdviceService>()
     ));
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

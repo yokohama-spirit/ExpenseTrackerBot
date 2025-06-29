@@ -1,4 +1,5 @@
-﻿using ExpenseTrackerLibrary.Domain.Interfaces;
+﻿using ExpenseTrackerLibrary.Domain.Entities;
+using ExpenseTrackerLibrary.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,10 +23,10 @@ namespace ExpenseTrackerLibrary.Application.Services
         {
             var result = new LimitCheckResult();
 
-            if (!await _limitRepo.HasLimitAsync(chatId))
+            if (!await _limitRepo.HasLimit(chatId))
                 return result;
 
-            var limit = await _limitRepo.GetCurrentLimitAsync(chatId);
+            var limit = await _limitRepo.GetCurrentLimit(chatId);
             var monthlyTotal = await _expenseRepo.GetCurrentMonthTotalAsync(chatId) + expenseAmount;
 
             result.IsLimitExceeded = monthlyTotal >= limit;
@@ -35,13 +36,5 @@ namespace ExpenseTrackerLibrary.Application.Services
 
             return result;
         }
-    }
-
-    public class LimitCheckResult
-    {
-        public bool IsLimitExceeded { get; set; }
-        public bool IsWarningNeeded { get; set; }
-        public decimal? CurrentLimit { get; set; }
-        public decimal CurrentSpent { get; set; }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using ExpenseTrackerLibrary.Application.Services;
+using ExpenseTrackerLibrary.Domain.Entities;
 using ExpenseTrackerLibrary.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -38,13 +39,21 @@ namespace ExpenseTrackerAPI.Controllers
         {
             try
             {
-                await _limit.SetLimitAsync(chatId, amount);
+                await _limit.SetLimit(chatId, amount);
                 return Ok();
             }
             catch (Exception ex)
             {
                 return BadRequest($"Ошибка: {ex}");
             }
+        }
+
+        [HttpGet("clear")]
+        public async Task<string> SetLimit(
+[FromQuery] long chatId)
+        {
+            var result = await _limit.ClearLimit(chatId);
+            return result;
         }
     }
 }

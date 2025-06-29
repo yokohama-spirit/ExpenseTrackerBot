@@ -1,4 +1,5 @@
 ﻿using ExpenseTrackerLibrary.Application.Services;
+using ExpenseTrackerLibrary.Domain.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;

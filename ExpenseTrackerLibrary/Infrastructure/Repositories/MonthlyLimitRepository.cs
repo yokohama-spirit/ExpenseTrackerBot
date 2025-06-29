@@ -19,7 +19,7 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
             _conn = conn;
         }
 
-        public async Task SetLimitAsync(long chatId, decimal amount)
+        public async Task SetLimit(long chatId, decimal amount)
         {
             var existing = await _conn.Limits
                 .FirstOrDefaultAsync(x => x.ChatId == chatId);
@@ -40,7 +40,25 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
             await _conn.SaveChangesAsync();
         }
 
-        public async Task<decimal?> GetCurrentLimitAsync(long chatId)
+
+        public async Task<string> ClearLimit(long chatId)
+        {
+            var existing = await _conn.Limits
+                .FirstOrDefaultAsync(x => x.ChatId == chatId);
+
+            if (existing != null)
+            {
+                _conn.Limits.Remove(existing);
+                await _conn.SaveChangesAsync();
+                return "Y";
+            }
+            else
+            {
+                return "N";
+            }
+        }
+
+        public async Task<decimal?> GetCurrentLimit(long chatId)
         {
             return await _conn.Limits
                 .Where(x => x.ChatId == chatId)
@@ -48,7 +66,7 @@ namespace ExpenseTrackerLibrary.Infrastructure.Repositories
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<bool> HasLimitAsync(long chatId)
+        public async Task<bool> HasLimit(long chatId)
         {
             return await _conn.Limits
                 .AnyAsync(x => x.ChatId == chatId);

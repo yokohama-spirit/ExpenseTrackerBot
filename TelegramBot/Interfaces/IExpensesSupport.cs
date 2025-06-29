@@ -1,7 +1,7 @@
 ﻿using Telegram.Bot;
 using TelegramBot.Config;
 
-namespace TelegramBot.Support
+namespace TelegramBot.Interfaces
 {
     public interface IExpensesSupport
     {
@@ -10,8 +10,6 @@ namespace TelegramBot.Support
         Task HandleCheckWeeklyCommand(long chatId, CancellationToken ct);
         Task HandleCheckMonthlyCommand(long chatId, CancellationToken ct);
         Task HandleUserInput(long chatId, string text, CancellationToken ct);
-        Task ProcessExpenseCreation(long chatId, string text, string cat, ExpenseCreationState state, CancellationToken ct);
-        Task HandleErrorAsync(ITelegramBotClient bot, Exception ex, CancellationToken ct);
         Task HandleCommsCommand(long chatId, CancellationToken ct);
         Task<bool> isActive(long chatId, CancellationToken ct);
         Task HandleMyExpensesCommand(long chatId, CancellationToken ct);
@@ -22,5 +20,7 @@ namespace TelegramBot.Support
         Task HandleSetLimitCommand(long chatId, CancellationToken ct);
         Task HandleSetLimitInputCommand(long chatId, string amountText, CancellationToken ct);
         Task<bool> isActiveLimit(long chatId);
+        Task HandleGetTipsCommand(long chatId, CancellationToken ct);
+        Task HandleClearLimitCommand(long chatId, CancellationToken ct);
     }
 }

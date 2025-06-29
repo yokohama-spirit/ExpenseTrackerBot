@@ -1,4 +1,4 @@
-﻿namespace TelegramBot.Support
+﻿namespace TelegramBot.Interfaces
 {
     public interface ICategorySupport
     {

@@ -8,8 +8,9 @@ namespace ExpenseTrackerLibrary.Domain.Interfaces
 {
     public interface IMonthlyLimitRepository
     {
-        Task SetLimitAsync(long chatId, decimal amount);
-        Task<decimal?> GetCurrentLimitAsync(long chatId);
-        Task<bool> HasLimitAsync(long chatId);
+        Task SetLimit(long chatId, decimal amount);
+        Task<string> ClearLimit(long chatId);
+        Task<decimal?> GetCurrentLimit(long chatId);
+        Task<bool> HasLimit(long chatId);
     }
 }
